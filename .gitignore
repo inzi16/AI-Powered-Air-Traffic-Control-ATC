@@ -1,0 +1,22 @@
+.venv/
+.runtime/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.log
+.env
+
+frontend/node_modules/
+frontend/.vite-cache/
+frontend/dist/
+frontend/*.tsbuildinfo
+
+# Internal working files, not part of the public repo
+audit-current/
+design-qa/
+design-reference/
+design-qa.md
+RESUME.md
+
+.DS_Store
+Thumbs.db

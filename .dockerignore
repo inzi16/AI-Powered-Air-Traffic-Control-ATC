@@ -1,0 +1,9 @@
+.git
+.venv
+.runtime
+.pytest_cache
+**/__pycache__
+frontend/node_modules
+frontend/dist
+audit-current
+design-reference

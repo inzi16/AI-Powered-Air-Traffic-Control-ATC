@@ -1,0 +1,2 @@
+# Optional Windows/MSFS connector. The demo runtime works without it.
+SimConnect==0.4.26
