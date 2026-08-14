@@ -4,6 +4,7 @@
 
 let audioCtx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
+let resumePending: Promise<void> | null = null;
 let _muted = false;
 
 function getContext(): AudioContext {
@@ -12,6 +13,11 @@ function getContext(): AudioContext {
     masterGain = audioCtx.createGain();
     masterGain.gain.value = 1.0;
     masterGain.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === 'suspended' && !resumePending) {
+    resumePending = audioCtx.resume().catch(() => undefined).finally(() => {
+      resumePending = null;
+    });
   }
   return audioCtx;
 }

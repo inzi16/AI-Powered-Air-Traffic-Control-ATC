@@ -1,0 +1,85 @@
+name: Feature request
+description: Propose a focused, testable improvement to Smart ATC.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Smart ATC is a training and simulation project, not certified operational aviation software. Proposals should preserve that boundary and identify the source and freshness of any aviation data they introduce.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checks
+      options:
+        - label: I searched existing issues and roadmap documents for this request.
+          required: true
+        - label: I can describe a user outcome rather than only a technology choice.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Product area
+      options:
+        - Controller or pilot workflow
+        - Map, radar, or geospatial visualization
+        - Simulation, routes, or flight intelligence
+        - Emergency training and debrief
+        - Voice, chat, or AI gateway
+        - Collaboration, rooms, replay, or journal
+        - Accessibility, performance, or offline readiness
+        - Backend, contracts, deployment, or developer experience
+        - Other cross-cutting capability
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or user outcome
+      description: Who needs this, in what scenario, and what becomes easier or safer to demonstrate?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the interaction, state changes, and how failure or stale/offline data should be handled.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable, testable outcomes and any performance or accessibility target.
+      placeholder: |
+        - [ ] Given ..., when ..., then ...
+        - [ ] Keyboard and screen-reader behavior is ...
+        - [ ] Failure and recovery behavior is ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: data_safety
+    attributes:
+      label: Data, AI, and safety considerations
+      description: Identify external data/licensing, model behavior, confidence claims, privacy, or operational-aviation risks. Enter "None" if not applicable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Note smaller approaches, existing open-source components, or workarounds you evaluated.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to help implement or test this feature.
+

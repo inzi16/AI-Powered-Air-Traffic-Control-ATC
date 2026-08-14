@@ -1,0 +1,318 @@
+{
+  "api_schema_version": "3.0.0",
+  "benchmark_schema": "smart-atc.backend-benchmark.v1",
+  "benchmark_version": "1.0.0",
+  "config": {
+    "duplicate_requests": 100,
+    "fixed_step_seconds": 0.2,
+    "quick_mode": false,
+    "rooms": 8,
+    "route_destination": "VABB",
+    "route_max_ticks": 2000,
+    "route_origin": "VOMM",
+    "route_step_seconds": 0.25,
+    "route_time_scale": 120.0,
+    "seed": 7300,
+    "ticks_per_room": 300,
+    "warmup_ticks": 10
+  },
+  "disclaimer": "Local single-process evidence only. Results exclude HTTP/WebSocket, network, database, multi-process scheduling, and production infrastructure overhead; they are not a capacity claim.",
+  "duplicate_command": {
+    "deduplicated_receipts": 99,
+    "duplicate_mutations": 0,
+    "executor_mutations": 1,
+    "failure_count": 0,
+    "failures": [],
+    "latency": {
+      "max_ms": 24.2381,
+      "mean_ms": 20.743373,
+      "min_ms": 13.4527,
+      "p50_ms": 21.5312,
+      "p95_ms": 24.0137,
+      "p99_ms": 24.1711,
+      "sample_count": 100
+    },
+    "ledger_entry_count": 1,
+    "primary_receipts": 1,
+    "request_count": 100,
+    "revision_delta": 1,
+    "sequence_delta": 1,
+    "successful_responses": 100,
+    "unique_event_count": 1,
+    "wall_time_seconds": 0.030053
+  },
+  "environment": {
+    "captured_at_utc": "2026-08-14T06:19:31.899254Z",
+    "git_head": "287fe299906321ccffa84dcf326364ef0c4ad549",
+    "logical_cpu_count": 12,
+    "machine": "AMD64",
+    "platform": "Windows-11-10.0.22631-SP0",
+    "processor": "Intel64 Family 6 Model 141 Stepping 1, GenuineIntel",
+    "python_compiler": "MSC v.1944 64 bit (AMD64)",
+    "python_executable": "python.exe",
+    "python_implementation": "CPython",
+    "python_version": "3.12.13",
+    "release": "11",
+    "system": "Windows",
+    "working_tree_dirty": true
+  },
+  "failure_count": 0,
+  "failures": [],
+  "gate_passed": true,
+  "gates": [
+    {
+      "name": "fixed_step_no_failures",
+      "observed": 0,
+      "passed": true,
+      "requirement": "failure_count == 0"
+    },
+    {
+      "name": "fixed_step_throughput",
+      "observed": 1104.15,
+      "passed": true,
+      "requirement": ">= 50 snapshots/second"
+    },
+    {
+      "name": "fixed_step_p95_latency",
+      "observed": 1.4849,
+      "passed": true,
+      "requirement": "<= 50 ms"
+    },
+    {
+      "name": "fixed_step_p99_latency",
+      "observed": 2.4077,
+      "passed": true,
+      "requirement": "<= 100 ms"
+    },
+    {
+      "name": "deterministic_replay",
+      "observed": 0,
+      "passed": true,
+      "requirement": "0 checksum divergences"
+    },
+    {
+      "name": "room_isolation",
+      "observed": {
+        "peer_divergences": 0,
+        "shared_mutables": 0,
+        "target_changed": true,
+        "unique_checksums": 8,
+        "unique_sessions": 8
+      },
+      "passed": true,
+      "requirement": "unique checksums/sessions, no shared mutables, target-only probe change"
+    },
+    {
+      "name": "route_completion_and_phase_coverage",
+      "observed": {
+        "completed": true,
+        "failure_count": 0,
+        "missing_phases": []
+      },
+      "passed": true,
+      "requirement": "completed with every required phase and zero route failures"
+    },
+    {
+      "name": "route_local_wall_time",
+      "observed": 0.465243,
+      "passed": true,
+      "requirement": "<= 30 seconds"
+    },
+    {
+      "name": "duplicate_command_exactly_once",
+      "observed": {
+        "deduplicated_receipts": 99,
+        "duplicate_mutations": 0,
+        "executor_mutations": 1,
+        "responses": 100,
+        "unique_events": 1
+      },
+      "passed": true,
+      "requirement": "one mutation/event/ledger entry and all retries deduplicated"
+    }
+  ],
+  "isolation": {
+    "checksum_algorithm": "sha256-canonical-json-v1",
+    "deterministic_divergence_count": 0,
+    "deterministic_replay_checksums": {
+      "room_00": "dab921735fca2c86619045f8e447f0a6879d0943b9a034257ae3d4332de0775c",
+      "room_01": "3601ac49042ebdaef4060f2e40cc837fbe154f8d0d270a58b8325d3df4e1b359",
+      "room_02": "80fd05ebad32ae54a3700e1c41d22629e46e44430de27fe432be54d49ffbfbd2",
+      "room_03": "6a1d5fd339256943cfcc932659cb5bdebd1bc94cf2e765ddc211d92ef42dca46",
+      "room_04": "73f827046adb8272b8d1768fe3ef883dbe61afe6ab48983834f5f8ae217b0193",
+      "room_05": "8a0772e7d2c03f30b5762638a2ed1e36d2838c26d99d5d1abd307eaa013f34aa",
+      "room_06": "6b97debe86e002eb00ed28f60c6ad06ac69aa175c399f0f05bbfa450fd480d3b",
+      "room_07": "5cb3074e2f12950c12d9d9a789a441ec628956dd3889e52ee778823ffa13a520"
+    },
+    "isolation_probe_changed_target": true,
+    "isolation_probe_peer_divergence_count": 0,
+    "room_checksums": {
+      "room_00": "dab921735fca2c86619045f8e447f0a6879d0943b9a034257ae3d4332de0775c",
+      "room_01": "3601ac49042ebdaef4060f2e40cc837fbe154f8d0d270a58b8325d3df4e1b359",
+      "room_02": "80fd05ebad32ae54a3700e1c41d22629e46e44430de27fe432be54d49ffbfbd2",
+      "room_03": "6a1d5fd339256943cfcc932659cb5bdebd1bc94cf2e765ddc211d92ef42dca46",
+      "room_04": "73f827046adb8272b8d1768fe3ef883dbe61afe6ab48983834f5f8ae217b0193",
+      "room_05": "8a0772e7d2c03f30b5762638a2ed1e36d2838c26d99d5d1abd307eaa013f34aa",
+      "room_06": "6b97debe86e002eb00ed28f60c6ad06ac69aa175c399f0f05bbfa450fd480d3b",
+      "room_07": "5cb3074e2f12950c12d9d9a789a441ec628956dd3889e52ee778823ffa13a520"
+    },
+    "shared_mutable_object_count": 0,
+    "unique_room_checksum_count": 8,
+    "unique_runtime_session_count": 8
+  },
+  "production_capacity_claim": false,
+  "route_completion": {
+    "completed": true,
+    "destination": "VABB",
+    "destination_elevation_ft": 39.0,
+    "failure_count": 0,
+    "failures": [],
+    "final_altitude_ft": 39.0,
+    "final_checksum": "b6273ae96891450acccc90a10cbec7a57a5555731d29627915760e5d14f4e934",
+    "final_ground_speed_kts": 0.0,
+    "final_on_ground": true,
+    "final_position_error_nm": 0.0,
+    "final_progress": 1.0,
+    "latency": {
+      "max_ms": 5.4211,
+      "mean_ms": 2.043183,
+      "min_ms": 0.7398,
+      "p50_ms": 1.9367,
+      "p95_ms": 3.5116,
+      "p99_ms": 4.2913,
+      "sample_count": 225
+    },
+    "missing_phases": [],
+    "origin": "VOMM",
+    "phase_transitions": [
+      {
+        "phase": "AT_GATE",
+        "simulation_time_seconds": 30.0,
+        "tick": 1
+      },
+      {
+        "phase": "PUSHBACK",
+        "simulation_time_seconds": 150.0,
+        "tick": 5
+      },
+      {
+        "phase": "TAXI",
+        "simulation_time_seconds": 330.0,
+        "tick": 11
+      },
+      {
+        "phase": "HOLDING_SHORT",
+        "simulation_time_seconds": 780.0,
+        "tick": 26
+      },
+      {
+        "phase": "TAKEOFF_ROLL",
+        "simulation_time_seconds": 900.0,
+        "tick": 30
+      },
+      {
+        "phase": "INITIAL_CLIMB",
+        "simulation_time_seconds": 1200.0,
+        "tick": 40
+      },
+      {
+        "phase": "CLIMB",
+        "simulation_time_seconds": 1290.0,
+        "tick": 43
+      },
+      {
+        "phase": "CRUISE",
+        "simulation_time_seconds": 2130.0,
+        "tick": 71
+      },
+      {
+        "phase": "DESCENT",
+        "simulation_time_seconds": 5070.0,
+        "tick": 169
+      },
+      {
+        "phase": "APPROACH",
+        "simulation_time_seconds": 6000.0,
+        "tick": 200
+      },
+      {
+        "phase": "FINAL_APPROACH",
+        "simulation_time_seconds": 6360.0,
+        "tick": 212
+      },
+      {
+        "phase": "LANDING",
+        "simulation_time_seconds": 6660.0,
+        "tick": 222
+      },
+      {
+        "phase": "LANDED",
+        "simulation_time_seconds": 6720.0,
+        "tick": 224
+      },
+      {
+        "phase": "AT_GATE",
+        "simulation_time_seconds": 6750.0,
+        "tick": 225
+      }
+    ],
+    "phases_seen": [
+      "AT_GATE",
+      "PUSHBACK",
+      "TAXI",
+      "HOLDING_SHORT",
+      "TAKEOFF_ROLL",
+      "INITIAL_CLIMB",
+      "CLIMB",
+      "CRUISE",
+      "DESCENT",
+      "APPROACH",
+      "FINAL_APPROACH",
+      "LANDING",
+      "LANDED"
+    ],
+    "required_phases": [
+      "AT_GATE",
+      "PUSHBACK",
+      "TAXI",
+      "HOLDING_SHORT",
+      "TAKEOFF_ROLL",
+      "INITIAL_CLIMB",
+      "CLIMB",
+      "CRUISE",
+      "DESCENT",
+      "APPROACH",
+      "FINAL_APPROACH",
+      "LANDING",
+      "LANDED"
+    ],
+    "simulated_time_seconds": 6750.0,
+    "ticks": 225,
+    "total_distance_nm": 558.03,
+    "wall_time_seconds": 0.465243
+  },
+  "scope": "local_in_process_evidence",
+  "throughput": {
+    "deterministic_verification_sample_count": 2400,
+    "failure_count": 0,
+    "failures": [],
+    "fixed_step_seconds": 0.2,
+    "latency": {
+      "max_ms": 14.0569,
+      "mean_ms": 0.900361,
+      "min_ms": 0.5189,
+      "p50_ms": 0.7536,
+      "p95_ms": 1.4849,
+      "p99_ms": 2.4077,
+      "sample_count": 2400
+    },
+    "measured_ticks_per_room": 300,
+    "room_count": 8,
+    "sample_count": 2400,
+    "snapshots_per_second": 1104.15,
+    "verification_wall_time_seconds": 3.783376,
+    "wall_time_seconds": 2.173617,
+    "warmup_ticks_per_room": 10
+  },
+  "total_wall_time_seconds": 7.124654
+}

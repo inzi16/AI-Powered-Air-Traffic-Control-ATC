@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "Smart Air Traffic Control",
+  "short_name": "SMART ATC",
+  "description": "LLM-assisted aviation training and operations console for Smart Air Traffic Control.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d0e0c",
+  "theme_color": "#0d0e0c",
+  "categories": ["education", "simulation", "productivity"],
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

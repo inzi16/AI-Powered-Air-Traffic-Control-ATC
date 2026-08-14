@@ -1,10 +1,10 @@
-# SkyCommand production and 100x roadmap
+# Smart Air Traffic Control (ATC) production and 100x roadmap
 
 The revamp establishes a credible single-node training product. A real production system should now become more reliable, more explainable, and more scalable in that order.
 
 ## P0 — harden what exists
 
-1. Keep one server-side session object per authenticated user or training room. The current local runtime is intentionally single-session; multi-user deployment must not share state.
+1. Keep one server-side session object per authenticated user or training room. The current in-process room registry now isolates runtime, model context, streams, commands, and journals; a distributed deployment must preserve that boundary when moving the registry to durable infrastructure.
 2. Move browser authentication to an OIDC/OAuth2 gateway with short-lived, scoped tokens. Keep the existing API key for trusted service-to-service traffic only.
 3. Persist routes, events, clearances, emergencies, transcripts, and audit records in PostgreSQL/PostGIS. Treat the in-memory snapshot as a cache, not the record of truth.
 4. Add idempotency keys to mutations, optimistic concurrency with expected sequence/revision, command deduplication, rate limits, and immutable audit events.

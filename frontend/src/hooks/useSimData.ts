@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, fetchSimState, toConnectionErrorInfo } from '../api';
 import {
   SimSnapshotGate,
+  snapshotSchemaRejectionMessage,
   subscribeToSimSessionInvalidation,
 } from '../state/simState';
 import {
@@ -21,6 +22,7 @@ export type {
   EmergencyState,
   RoutePlan,
   RouteProgress,
+  ScenarioControlState,
   SimData,
   TrafficContact,
   WeatherData,
@@ -79,14 +81,18 @@ export function useSimData(pollInterval = 1_500): SimHookResult {
             last_message_at_ms: receivedAtMs,
             next_retry_at: null,
             last_error: null,
+            schema_compatible: true,
+            schema_error: null,
           }));
         } else {
+          const schemaError = snapshotSchemaRejectionMessage(result.reason);
           setConnection(previous => ({
             ...previous,
             status: 'online',
             backend_online: true,
             rejected_snapshots: previous.rejected_snapshots + 1,
             last_rejection_reason: result.reason,
+            ...(schemaError ? { schema_compatible: false, schema_error: schemaError } : {}),
           }));
         }
       } catch (error) {

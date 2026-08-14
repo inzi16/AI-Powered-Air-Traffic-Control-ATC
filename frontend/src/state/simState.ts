@@ -13,6 +13,7 @@ import {
   type RoutePlan,
   type RouteProgress,
   type RouteWaypoint,
+  type ScenarioControlState,
   type SimData,
   type SimSnapshotPayload,
   type SimTransport,
@@ -23,11 +24,18 @@ import {
   type TrafficContact,
   type WeatherData,
 } from '../types/sim';
+import { SNAPSHOT_SCHEMA_VERSION } from '../generated/contractMetadata';
+import {
+  clearAcceptedCommandContext,
+  updateAcceptedCommandContext,
+} from './commandContext';
 
 type UnknownRecord = Record<string, unknown>;
 
 const LEGACY_SCHEMA: SnapshotSchemaInfo = { name: 'atc.sim.snapshot', version: 'legacy' };
 const MAX_REASONABLE_DATA_AGE_MS = 15_000;
+const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const EXPECTED_SCHEMA_MAJOR = Number.parseInt(SNAPSHOT_SCHEMA_VERSION.split('.')[0], 10);
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -115,6 +123,55 @@ function firstValue(records: UnknownRecord[], keys: string[]): unknown {
   return undefined;
 }
 
+type SchemaVersionCheck =
+  | { compatible: true }
+  | { compatible: false; reason: 'schema_version_invalid' | 'schema_version_incompatible' };
+
+function explicitSchemaVersions(records: UnknownRecord[]): unknown[] {
+  const versions: unknown[] = [];
+  for (const record of records) {
+    for (const key of ['schema_version', 'schemaVersion']) {
+      if (Object.hasOwn(record, key)) versions.push(record[key]);
+    }
+    if (!Object.hasOwn(record, 'schema')) continue;
+    const schema = record.schema;
+    if (typeof schema === 'string') {
+      const separator = schema.lastIndexOf('/');
+      if (separator > 0) versions.push(schema.slice(separator + 1));
+      else if (/^\d/.test(schema)) versions.push(schema);
+    }
+    if (isRecord(schema) && Object.hasOwn(schema, 'version')) {
+      versions.push(schema.version);
+    }
+  }
+  return versions;
+}
+
+function checkSchemaVersion(records: UnknownRecord[]): SchemaVersionCheck {
+  const versions = explicitSchemaVersions(records);
+  // A versionless payload is the only supported legacy path.
+  if (!versions.length) return { compatible: true };
+  for (const version of versions) {
+    if (typeof version !== 'string' || !SEMVER_PATTERN.test(version)) {
+      return { compatible: false, reason: 'schema_version_invalid' };
+    }
+    if (Number.parseInt(version.split('.')[0], 10) !== EXPECTED_SCHEMA_MAJOR) {
+      return { compatible: false, reason: 'schema_version_incompatible' };
+    }
+  }
+  return { compatible: true };
+}
+
+export function snapshotSchemaRejectionMessage(reason: SnapshotRejectionReason): string | null {
+  if (reason === 'schema_version_invalid') {
+    return `The backend sent a malformed snapshot schema version. This interface requires ${EXPECTED_SCHEMA_MAJOR}.x.`;
+  }
+  if (reason === 'schema_version_incompatible') {
+    return `The backend snapshot uses an incompatible major version. Update SMART ATC so the interface and backend both use ${EXPECTED_SCHEMA_MAJOR}.x.`;
+  }
+  return null;
+}
+
 interface UnpackedPayload {
   envelope: UnknownRecord;
   state: UnknownRecord;
@@ -131,7 +188,13 @@ function unpackPayload(payload: unknown): UnpackedPayload | null {
       ? envelope.state
       : data;
   const state = nestedState ? { ...envelope, ...(data ?? {}), ...nestedState } : envelope;
-  const metadata = [envelope.metadata, envelope.meta, payload.metadata, payload.meta]
+  const metadata = [
+    ...(envelope !== payload ? [payload] : []),
+    envelope.metadata,
+    envelope.meta,
+    payload.metadata,
+    payload.meta,
+  ]
     .filter(isRecord);
   return { envelope, state, metadata };
 }
@@ -711,9 +774,38 @@ function normalizeFieldQuality(records: UnknownRecord[], fallback: Record<string
   return Object.keys(result).length > 0 ? result : { ...fallback };
 }
 
+function normalizeScenarioControl(
+  value: unknown,
+  fallback: ScenarioControlState,
+  sessionId: string,
+  sequence: number,
+  observedAt: string,
+): ScenarioControlState {
+  if (!isRecord(value)) {
+    return fallback.session_id === sessionId
+      ? { ...fallback }
+      : { session_id: sessionId, status: 'running', paused: false, time_scale: 1, simulation_time_seconds: 0, changed_at: observedAt, snapshot_sequence: sequence };
+  }
+  const paused = booleanValue(value.paused) ?? value.status === 'paused';
+  return {
+    session_id: stringOr(value.session_id, sessionId),
+    status: paused ? 'paused' : 'running',
+    paused,
+    time_scale: numberOr(value.time_scale, fallback.time_scale, 0.25, 120),
+    simulation_time_seconds: numberOr(value.simulation_time_seconds, fallback.simulation_time_seconds, 0),
+    changed_at: stringOr(value.changed_at, observedAt),
+    snapshot_sequence: Math.max(0, integer(value.snapshot_sequence) ?? sequence),
+  };
+}
+
 interface WireIdentity {
   sessionId: string | null;
   sequence: number | null;
+}
+
+function readWireStateRevision(records: UnknownRecord[]): number | null {
+  const parsed = integer(firstValue(records, ['state_revision', 'stateRevision']));
+  return parsed !== null && parsed >= 0 ? parsed : null;
 }
 
 function readWireIdentity(records: UnknownRecord[]): WireIdentity {
@@ -773,6 +865,7 @@ function normalizeSnapshot(
     wireTimestamps.timestamps.server_at ?? wireTimestamps.timestamps.received_at,
   ) ?? wireTimestamps.timestamps.received_at;
   const advisories = normalizeAdvisories(state.advisories ?? state.alerts, base.advisories);
+  const scenarioControl = normalizeScenarioControl(state.scenario_control, base.scenario_control, context.sessionId, context.sequence, observedAt);
   const snapshot: SimData = {
     connected,
     altitude: numberOr(state.altitude, base.altitude),
@@ -806,12 +899,14 @@ function normalizeSnapshot(
     nearest_airport: normalizeAirport(state.nearest_airport, base.nearest_airport),
     session_id: context.sessionId,
     sequence: context.sequence,
+    state_revision: Math.max(0, integer(firstValue(records, ['state_revision', 'stateRevision'])) ?? base.state_revision),
     schema: normalizeSchema(records, base.schema ?? LEGACY_SCHEMA),
     timestamps: wireTimestamps.timestamps,
     source: sourceInfo.type,
     data_quality: normalizeFieldQuality(records, base.data_quality),
     source_info: sourceInfo,
     quality,
+    scenario_control: scenarioControl,
     route_plan: routePlan,
     route_progress: routeProgress,
     advisories,
@@ -838,6 +933,8 @@ function normalizeSnapshot(
 
 export interface SnapshotAcceptOptions {
   transport: SimTransport;
+  /** Stable training-room scope used to prevent cross-room command cursors. */
+  trainingSessionId?: string;
   receivedAtMs?: number;
   /** Revision captured when a REST resync was started, used to prevent races. */
   expectedRevision?: number;
@@ -894,6 +991,7 @@ export class SimSnapshotGate {
   }
 
   reset(sessionId?: string): SimData {
+    clearAcceptedCommandContext();
     this.legacySessionGeneration += 1;
     const nextSessionId = sessionId?.trim() || `legacy:${this.legacySessionGeneration}`;
     this.snapshot = createDefaultSimData(nextSessionId);
@@ -912,7 +1010,13 @@ export class SimSnapshotGate {
     }
 
     const records = [unpacked.envelope, unpacked.state, ...unpacked.metadata];
+    const schemaVersion = checkSchemaVersion(records);
+    if (!schemaVersion.compatible) {
+      clearAcceptedCommandContext();
+      return { accepted: false, reason: schemaVersion.reason, transport: options.transport, revision: this.revision };
+    }
     const identity = readWireIdentity(records);
+    const stateRevision = readWireStateRevision(records);
     const receivedAtMs = options.receivedAtMs ?? Date.now();
     const timestamps = normalizeTimestamps(records, receivedAtMs);
     let sessionChanged = false;
@@ -969,6 +1073,16 @@ export class SimSnapshotGate {
       receivedAtMs,
       resetState: sessionChanged,
     });
+    if (stateRevision === null) {
+      clearAcceptedCommandContext();
+    } else {
+      updateAcceptedCommandContext({
+        trainingSessionId: options.trainingSessionId?.trim() || null,
+        runtimeSessionId: this.snapshot.session_id,
+        sequence: this.snapshot.sequence,
+        stateRevision: this.snapshot.state_revision,
+      });
+    }
     this.revision += 1;
 
     return {

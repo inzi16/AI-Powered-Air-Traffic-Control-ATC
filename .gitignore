@@ -1,15 +1,51 @@
 .venv/
 .runtime/
+.verify-runtime/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
 __pycache__/
 *.py[cod]
 *.log
-.env
+
+# Local configuration and credentials. Commit examples only.
+.env*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.kdbx
+*.keystore
+*.ppk
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+.npmrc
+.pypirc
+.netrc
+.git-credentials
+.secrets/
+secrets/
+credentials/
+
+# Local coverage, editor, and build state.
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.idea/
+.vscode/
 
 frontend/node_modules/
 frontend/.vite-cache/
 frontend/dist/
 frontend/*.tsbuildinfo
+frontend/coverage/
 
 # Internal working files, not part of the public repo
 audit-current/

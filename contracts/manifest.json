@@ -1,0 +1,362 @@
+{
+  "api_version": "3.0.0",
+  "canonicalization": "utf8-json-sort-keys-indent-2-lf-v1",
+  "channel_count": 1,
+  "channels": {
+    "state_snapshot_stream": {
+      "accept_headers": [
+        "X-Session-ID",
+        "X-Runtime-Session-ID"
+      ],
+      "authentication": {
+        "failure_close_code": 4401,
+        "header": "X-API-Key",
+        "required_when_configured": true,
+        "transport": "header_only"
+      },
+      "close_codes": {
+        "4400": "invalid selector or selector mismatch",
+        "4401": "authentication required",
+        "4404": "training session not found",
+        "4429": "session connection quota exceeded"
+      },
+      "delivery": {
+        "initial_snapshot_on_connect": true,
+        "nominal_hz": 5,
+        "ordering_sequence_field": "sequence",
+        "ordering_session_field": "session_id"
+      },
+      "direction": "server_to_client",
+      "message": {
+        "component": "Snapshot",
+        "component_sha256": "30574fe0a70c6308ac13f4be08fbc7c5d34f27123c2d3869ca96b03714645dcb",
+        "frame": "text",
+        "media_type": "application/json",
+        "schema_version": "3.0.0"
+      },
+      "path": "/ws/state",
+      "protocol": "websocket-rfc6455",
+      "session_selector": {
+        "default_when_omitted": "default",
+        "header": "X-Session-ID",
+        "mismatch_close_code": 4400,
+        "must_match_if_both": true,
+        "precedence": "header_then_query",
+        "query": "session_id"
+      },
+      "subprotocol": null
+    }
+  },
+  "contract_set_sha256": "b3b7fd15bf198a967807dd23dace47073edf622e71344fa88295fee8da17384f",
+  "generator_version": "1.0.0",
+  "manifest_version": "1.0.0",
+  "model_count": 76,
+  "model_hashes": {
+    "ActionCompleteRequest": "62a5b445abd43e585f29f8b5e37821386665e28039e0345738bd2fdb841eed27",
+    "ActionProposal": "76fd89718c6f831a351836c3e51cf6b9b9f0771b27a903c545f780e3b3999522",
+    "Airport": "c57d6a250853f43c9f8fb4d8d15e0a799c545c3bfb8d6f94028eeb843e82b498",
+    "Alert": "9004f4f1453b54829240b53759afa7f9b0f87dd36c5bd739cae691ad1efc315a",
+    "AlertAcknowledgement": "e8299e33a16debed568aee43e1e597e91399eec20467eb435406d0ad39b0c574",
+    "AlertAcknowledgementRequest": "537d65a08723009b13671d8abae090a472b19e400e11493b990673e2f7bdbafb",
+    "AlertAcknowledgementResponse": "e7e9eabc95bf6fd3f66f9810b589a8d11aa42c69899c96f85636fbcdf3b36f11",
+    "Body_speech_to_text_stt_post": "6239fd3862a004d422c0e9ea99826ce3dee48b8379d68c3418a58f2529089639",
+    "BookmarkCreateRequest": "e53c3eb3a8d50c0f96d24bf3658957b5b9631fd8139265e6a4a69df7bc6bd434",
+    "BookmarkUpdateRequest": "756abc58df4e38f1fe96cb80886a5e63a424c756de3459fefbd9671d9cfbbef6",
+    "CallsignRequest": "d9f6a6970e961d14db54ff3f7e79414fa6e2367c22b7164009341af0c39d5559",
+    "ChatRequest": "14f751331dc731c983c14616eab87ff8ad421025a08d79d249e3089beaa7dd67",
+    "Clearance": "0fc8c397f33d45acc5d76fe32573e094e18c6680cf827101b2835bf576e61f0d",
+    "ClearanceAcceptRequest": "327134e950e09c790f09b227af7c1f6ab251089c53ac6803bd3395decca7ddca",
+    "ClearanceInstruction": "ad046566f7b7d12780189f79cb6c0c5d6dceffcc01c03efecf63d47d83a5ca8c",
+    "CommandAuditPage": "9033ba5f9f131c9b1d8bcc9b1c528126bf37c15f25a004acb32bc25658bc216d",
+    "CommandAuditRecord": "5138921b90a464f3ef8723f2e1218ca06615ef13c7e0a593ffb82f47bca35309",
+    "CommandOnlyRequest": "babd411d2236ee51957ee20f57058eefb2f11f7f0e1c7409d24be11a07ad5744",
+    "CommandReceipt": "765394c519422c1e4d45b11ba9e276b671f89b2b48f1a330c78cc9cda69e56c9",
+    "CommandRequestMetadata": "7771d5a2ead1292273be3d238d28060925fb153a52f1444fcd9fa9184cd8a791",
+    "ConflictPrediction": "9f33552532ff2807b7afcf09a3e67fa56cdddf49f5438a9ae8e6ff5f1b4dd6e8",
+    "CustomScenarioRequest": "21049c30ff05f194083b3097cf81c6e56e87816e88e0183e22cfdb244a91f473",
+    "DemoStateUpdate": "a77da0b4a3b3e48562aa3d407cdf90493f068e6239c317bad0bd3eee900b237f",
+    "EmergencyAction": "bda2ee71b90d718149e77d851afb87949ae6d4fbee7c8f17263979f26ec7952a",
+    "EmergencyActivateRequest": "83f9d87de7db6ab90d947fde29a6eb7614392f2f78ec869fdcb9c405dfa98a3a",
+    "EmergencyResolveRequest": "01b507916c894a2e7aeac28b4cf15ce2d3d3941c12e8de7bea441fb87bd68ea1",
+    "EmergencyState": "d8c296551b9ea30b589c124f99077980a0f47428ff97282cb3ecb632f45596b2",
+    "EvalCaseResult": "e0d8c71c87b2d886fbdf0eb88606037a0c06cf2ed3082025d1098294a9c5066d",
+    "EvalMetrics": "bd19ad490fc05109023a9e2d906fc8dbca2f4e6ebe9fdf9deeeb12d126eefbb0",
+    "EventEnvelope": "fdf306a8c4b49ce4dee948a6b29c989526079f7c90aee6d92756de55b098b50a",
+    "EventMetadata": "cc1f6c26f75cd2483fd25f2ec6b51441f1f913c132ebee8dd1b2cfa63554ab47",
+    "EvidenceRecord": "df8a54fa476e5d94369e21f193065cb2c45d29740c52a5e51897ffe4c16f4b53",
+    "FallbackResponse": "6419eca2028bfaab40e769f0ef0d9637ea76285a70a628b556382249c8faf942",
+    "Frequencies": "75a3ea403af6645f262f908d04be33a05b08ab35eb7bfa248f381839df3bd2cb",
+    "GatewayCatalogResponse": "4da7038765631a49108df3aa4120d8baafab1fedb90f2af1053822a5b74f3ae5",
+    "GatewayErrorCode": "c962eca684f7f53b8eeb743afa956cf5b6004664b38cbb2f289f6107b0d32534",
+    "GatewayErrorDetail": "f9c1a1076f3b362a353bd3f56e7a0aea547de36c27172bc8ec013c4b72a2f29f",
+    "GatewayFailureResponse": "8fee466dd38b431ed4312ffd8eef75db0dbd61fcf36e512ff5fa26fe40908886",
+    "GatewayPolicyResponse": "d8df0ea77bcb3f9ca8a8ba116e3dc81dbd9fb1510f34662cb7a2822e607b5bce",
+    "GatewayProposalCreateRequest": "bde0adb9f84546bee8da6ce765c190c07aa58a5d68220fd1614b6ed9816d9e8e",
+    "GatewayProposalRevalidateRequest": "31ff0bee6712675c5159d9c897ac1eb1d0644d4a700c500152b334c393097d59",
+    "GatewayReadInvokeRequest": "d82377a97bed1517fa4c6271eb14eaa2f918842aa48470c78235657aac4c878c",
+    "HTTPValidationError": "3869c07dc91f5fcd771b8579f35ad249a01d23dc33594edc45f8d247130c4915",
+    "JournalCheckpoint": "31223ea20a5ab574cd82f6b29b1a9b8545356b3df04e19d4182c824d55fbf76d",
+    "JournalEventPage": "44c208456c49828335ce5e14204d2001e6118b9cb8aad7d51b2af76206e61ee1",
+    "JournalEventRecord": "e69a939ec5c3e783d99aaa5c7570643e447340bf83f4a48fcc6c8c89523174cd",
+    "JournalExport": "01ddd5a1f00b3f4bdbf9b48f8fdc38493cc1ffb1307c39fa4557f09f3224dbe8",
+    "JournalReplayResponse": "b716b60d34756943647f723308f38049f09283b3b301117a81b4b3604b105504",
+    "JournalSessionSummary": "3f8c630912d8331d7fdbde17170ef82f4cb5bd744c4a43e451070152bd20c0cd",
+    "ManualAirport": "c2b1005699fa2febd8f7416384b52edfecd8bb65ae069df7c875d79cfdb37801",
+    "ProposalRevalidation": "a9e783eb556cca66e8e80baf76cae317792a2dbc323fc670d4f8b7c4965782f0",
+    "ProvenanceRecord": "f406fa4ec2acee52c43ff4fb5f3cf3184b1beed21abe6f0f4d06149806dc4d9c",
+    "ReadToolResult": "f89787bb5648b11ee0735d6f1f880c119f6e29c8adca8510e00b87f59ff2043e",
+    "ResolutionCriterion": "3e6a9d696c883f588853f07cf9db450974512c75bc746e9341ca8abf4c4ca24f",
+    "RouteDemoRequest": "ec94f5bf4d3e5532f3e78dc5ba9fb71729e1b2a9991503e2637d39ea80f0356e",
+    "RouteEndpoint": "39560ec90907c8a721925454feda2a4ceda20111aa374b1fce357e3878a18ce2",
+    "RouteState": "809baa183d52b4f186d6fcbf8c75fb2e2b7552b6290f605024096ac00ec13e14",
+    "ScenarioControlRequest": "77fb491f54f795b5687c28c4e47ae47ca366ee860e1f535b959fdaabfa7f5afd",
+    "ScenarioControlState": "31346c12f82601ce49d0b04ead6ef57a7a2b78353850ad22de470fcc26d68add",
+    "ScenarioRequest": "b2b410c780ff62ed8c634fec21ed96f0ca786ebdd36e88029a1bdfad6839975b",
+    "ScenarioTimeScaleRequest": "615686b352357bd610ede5bd5c0a68a2b03aaa9d2f27e2b9a68bd7e0dc36fc8f",
+    "Severity": "6051f377e7be168b46b3c39e39062712813832997ceb7a5f47b369dfba951425",
+    "Snapshot": "30574fe0a70c6308ac13f4be08fbc7c5d34f27123c2d3869ca96b03714645dcb",
+    "SourceKind": "bfd50a1fb4f2d3efd1f2a153c06d58b669351e9e47e13a1ddcc5b5754c21fe96",
+    "TTSRequest": "453cccb892298c1b8ec8827e89762734926a9fbce3003cb188620bdd15d40006",
+    "TimelineBookmark": "ceb9a5f97b695565fe6f0f166ba37fbb505453d939084747df8afd4d5784523b",
+    "ToolDescriptor": "36ad9356452c1500d1f71e936fe09c3283d251f146acebb12d84ffdcfec781f5",
+    "ToolMode": "9bf448c658b4805370b619972377f33badf1b9126d05923c8b02fbc0264ac94b",
+    "TrafficTrack": "57fddd83274b1ec8ca4d12253af1c2c7f7809ed19bd6a7cc35132711702f1d74",
+    "TrainingSessionCreateRequest": "9193bd8c78a21139cda62f724924bf1fecdcee0b7050574a0028be9c236c696f",
+    "TrainingSessionList": "e23a411cdab64039e4a8348042a243540a18ffb8eda30bc04ec94cf0351bde1b",
+    "TrainingSessionMetadata": "d45c228012611c0590503919c82aec37e4a28cd9692067514621b92f4ffa87d3",
+    "TrainingSessionQuotaState": "70c759ab7e19607ed7891871dce41d9427493830697a45d10cd28963847be68c",
+    "ValidationError": "9297460bbb90dacef425e7bad88bf95ce90cce1020d67a94f2f8c966e02324ff",
+    "ValidatorResult": "a14f26a7970cbd19d3c39d5889b6bd5f81bc64d2fa030bb1a4a6af851a7b5e39",
+    "WeatherState": "91e09f3a54bda82bfc05dedd59c4308c4404efbfefca67335318f41d72896021"
+  },
+  "openapi_sha256": "b9b11dcb60c2e911b5f546a7473f7a768ac62e99fe80ccae4fe771361dabb837",
+  "openapi_version": "3.1.0",
+  "operation_count": 56,
+  "operations": {
+    "accept_clearance_clearances__clearance_id__accept_post": {
+      "method": "POST",
+      "path": "/clearances/{clearance_id}/accept"
+    },
+    "acknowledge_alert_alerts__alert_id__ack_post": {
+      "method": "POST",
+      "path": "/alerts/{alert_id}/ack"
+    },
+    "activate_emergency_emergencies_activate_post": {
+      "method": "POST",
+      "path": "/emergencies/activate"
+    },
+    "cancel_route_routes__route_id__cancel_post": {
+      "method": "POST",
+      "path": "/routes/{route_id}/cancel"
+    },
+    "chat_chat_post": {
+      "method": "POST",
+      "path": "/chat"
+    },
+    "complete_emergency_action_emergencies__emergency_id__actions__action_id__complete_post": {
+      "method": "POST",
+      "path": "/emergencies/{emergency_id}/actions/{action_id}/complete"
+    },
+    "create_ai_gateway_proposal_ai_gateway_proposals_post": {
+      "method": "POST",
+      "path": "/ai/gateway/proposals"
+    },
+    "create_timeline_bookmark_sessions__session_id__bookmarks_post": {
+      "method": "POST",
+      "path": "/sessions/{session_id}/bookmarks"
+    },
+    "create_training_session_training_sessions_post": {
+      "method": "POST",
+      "path": "/training-sessions"
+    },
+    "custom_scenario_scenario_custom_post": {
+      "method": "POST",
+      "path": "/scenario/custom"
+    },
+    "delete_timeline_bookmark_sessions__session_id__bookmarks__bookmark_id__delete": {
+      "method": "DELETE",
+      "path": "/sessions/{session_id}/bookmarks/{bookmark_id}"
+    },
+    "delete_training_session_training_sessions__session_id__delete": {
+      "method": "DELETE",
+      "path": "/training-sessions/{session_id}"
+    },
+    "emergency_catalog_emergencies_catalog_get": {
+      "method": "GET",
+      "path": "/emergencies/catalog"
+    },
+    "emergency_status_emergency_status_get": {
+      "method": "GET",
+      "path": "/emergency/status"
+    },
+    "engage_route_routes__route_id__engage_post": {
+      "method": "POST",
+      "path": "/routes/{route_id}/engage"
+    },
+    "export_journal_session_sessions__session_id__export_get": {
+      "method": "GET",
+      "path": "/sessions/{session_id}/export"
+    },
+    "get_ai_gateway_baseline_metrics_ai_gateway_evals_baseline_get": {
+      "method": "GET",
+      "path": "/ai/gateway/evals/baseline"
+    },
+    "get_ai_gateway_catalog_ai_gateway_catalog_get": {
+      "method": "GET",
+      "path": "/ai/gateway/catalog"
+    },
+    "get_ai_gateway_policy_ai_gateway_policy_get": {
+      "method": "GET",
+      "path": "/ai/gateway/policy"
+    },
+    "get_airport_airports__icao__get": {
+      "method": "GET",
+      "path": "/airports/{icao}"
+    },
+    "get_command_by_idempotency_key_commands_idempotency__idempotency_key__get": {
+      "method": "GET",
+      "path": "/commands/idempotency/{idempotency_key}"
+    },
+    "get_command_commands__command_id__get": {
+      "method": "GET",
+      "path": "/commands/{command_id}"
+    },
+    "get_journal_session_sessions__session_id__get": {
+      "method": "GET",
+      "path": "/sessions/{session_id}"
+    },
+    "get_scenario_control_scenario_control_get": {
+      "method": "GET",
+      "path": "/scenario/control"
+    },
+    "get_training_session_training_sessions__session_id__get": {
+      "method": "GET",
+      "path": "/training-sessions/{session_id}"
+    },
+    "health_health_get": {
+      "method": "GET",
+      "path": "/health"
+    },
+    "invoke_ai_gateway_read_ai_gateway_tools_read_post": {
+      "method": "POST",
+      "path": "/ai/gateway/tools/read"
+    },
+    "list_clearances_clearances_get": {
+      "method": "GET",
+      "path": "/clearances"
+    },
+    "list_commands_commands_get": {
+      "method": "GET",
+      "path": "/commands"
+    },
+    "list_journal_events_sessions__session_id__events_get": {
+      "method": "GET",
+      "path": "/sessions/{session_id}/events"
+    },
+    "list_journal_sessions_sessions_get": {
+      "method": "GET",
+      "path": "/sessions"
+    },
+    "list_scenarios_scenarios_get": {
+      "method": "GET",
+      "path": "/scenarios"
+    },
+    "list_timeline_bookmarks_sessions__session_id__bookmarks_get": {
+      "method": "GET",
+      "path": "/sessions/{session_id}/bookmarks"
+    },
+    "list_training_sessions_training_sessions_get": {
+      "method": "GET",
+      "path": "/training-sessions"
+    },
+    "list_voices_tts_voices_get": {
+      "method": "GET",
+      "path": "/tts/voices"
+    },
+    "load_scenario_scenario_load_post": {
+      "method": "POST",
+      "path": "/scenario/load"
+    },
+    "pause_scenario_scenario_pause_post": {
+      "method": "POST",
+      "path": "/scenario/pause"
+    },
+    "ready_ready_get": {
+      "method": "GET",
+      "path": "/ready"
+    },
+    "replay_journal_session_sessions__session_id__replay_get": {
+      "method": "GET",
+      "path": "/sessions/{session_id}/replay"
+    },
+    "reset_session_post_session_reset_post": {
+      "method": "POST",
+      "path": "/session/reset"
+    },
+    "resolve_emergency_by_id_emergencies__emergency_id__resolve_post": {
+      "method": "POST",
+      "path": "/emergencies/{emergency_id}/resolve"
+    },
+    "resolve_emergency_emergency_resolve_post": {
+      "method": "POST",
+      "path": "/emergency/resolve"
+    },
+    "resume_scenario_scenario_resume_post": {
+      "method": "POST",
+      "path": "/scenario/resume"
+    },
+    "revalidate_ai_gateway_proposal_ai_gateway_proposals_revalidate_post": {
+      "method": "POST",
+      "path": "/ai/gateway/proposals/revalidate"
+    },
+    "search_airports_airports_search_get": {
+      "method": "GET",
+      "path": "/airports/search"
+    },
+    "set_callsign_callsign_post": {
+      "method": "POST",
+      "path": "/callsign"
+    },
+    "set_scenario_time_scale_scenario_time_scale_post": {
+      "method": "POST",
+      "path": "/scenario/time-scale"
+    },
+    "sim_state_sim_state_get": {
+      "method": "GET",
+      "path": "/sim/state"
+    },
+    "speech_to_text_stt_post": {
+      "method": "POST",
+      "path": "/stt"
+    },
+    "start_demo_route_routes_demo_post": {
+      "method": "POST",
+      "path": "/routes/demo"
+    },
+    "text_to_speech_tts_post": {
+      "method": "POST",
+      "path": "/tts"
+    },
+    "touch_training_session_training_sessions__session_id__touch_post": {
+      "method": "POST",
+      "path": "/training-sessions/{session_id}/touch"
+    },
+    "unacknowledge_alert_alerts__alert_id__unack_post": {
+      "method": "POST",
+      "path": "/alerts/{alert_id}/unack"
+    },
+    "update_demo_state_demo_update_state_post": {
+      "method": "POST",
+      "path": "/demo/update-state"
+    },
+    "update_scenario_control_scenario_control_post": {
+      "method": "POST",
+      "path": "/scenario/control"
+    },
+    "update_timeline_bookmark_sessions__session_id__bookmarks__bookmark_id__patch": {
+      "method": "PATCH",
+      "path": "/sessions/{session_id}/bookmarks/{bookmark_id}"
+    }
+  },
+  "schema_version": "3.0.0"
+}

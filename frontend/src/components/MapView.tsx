@@ -4,6 +4,7 @@ import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer, useMap, useMa
 import L from 'leaflet';
 import { Crosshair, Navigation, Plane } from 'lucide-react';
 import type { SimData, TrafficContact } from '../hooks/useSimData';
+import { DEFAULT_SURVEILLANCE_FILTERS, matchesAltitudeBand, type SurveillanceFilters } from '../types/operations';
 
 type Waypoint = { lat: number; lon: number; ident?: string };
 type EnrichedSimData = SimData & {
@@ -14,7 +15,13 @@ type EnrichedSimData = SimData & {
   data_age_ms?: number;
 };
 
-interface Props { sim: EnrichedSimData }
+interface Props {
+  sim: EnrichedSimData;
+  filters?: SurveillanceFilters;
+  onFiltersChange?: (patch: Partial<SurveillanceFilters>) => void;
+  selectedCallsign?: string | null;
+  onSelectCallsign?: (callsign: string | null) => void;
+}
 
 const DEFAULT_CENTER: [number, number] = [12.9941, 80.1709];
 const MAX_TRAIL_POINTS = 240;
@@ -100,7 +107,13 @@ function MapController({ center, zoom, follow, onFreePan }: { center: [number, n
   return null;
 }
 
-export default function MapView({ sim }: Props) {
+export default function MapView({
+  sim,
+  filters = DEFAULT_SURVEILLANCE_FILTERS,
+  onFiltersChange,
+  selectedCallsign = null,
+  onSelectCallsign,
+}: Props) {
   const [follow, setFollow] = useState(true);
   const [trail, setTrail] = useState<[number, number][]>([]);
   const trailSession = useRef(sim.session_id);
@@ -146,8 +159,11 @@ export default function MapView({ sim }: Props) {
 
   const traffic = useMemo(() => [...(sim.traffic || [])]
     .filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lon))
+    .filter(() => filters.showTraffic)
+    .filter((item) => !filters.conflictsOnly || conflictIds.has(item.callsign))
+    .filter((item) => matchesAltitudeBand(item.altitude, filters.altitudeBand))
     .sort((a, b) => Number(conflictIds.has(b.callsign)) - Number(conflictIds.has(a.callsign)) || a.range_nm - b.range_nm)
-    .slice(0, 45), [conflictIds, sim.traffic]);
+    .slice(0, 45), [conflictIds, filters.altitudeBand, filters.conflictsOnly, filters.showTraffic, sim.traffic]);
 
   return (
     <div className="map-shell" aria-label="Live geographic flight map">
@@ -159,15 +175,15 @@ export default function MapView({ sim }: Props) {
         />
         <MapController center={center} zoom={zoom} follow={follow} onFreePan={() => setFollow(false)} />
 
-        {routePoints.length > 1 && <Polyline positions={routePoints} pathOptions={{ color: '#c9ff18', weight: 2.4, opacity: .9 }} />}
-        {trail.length > 1 && <Polyline positions={trail} pathOptions={{ color: ownshipColor, weight: 1.5, opacity: .42, dashArray: '3 6' }} />}
+        {filters.showRoute && routePoints.length > 1 && <Polyline positions={routePoints} pathOptions={{ color: '#c9ff18', weight: 2.4, opacity: .9 }} />}
+        {filters.showTrail && trail.length > 1 && <Polyline positions={trail} pathOptions={{ color: ownshipColor, weight: 1.5, opacity: .42, dashArray: '3 6' }} />}
         {validPosition && <Polyline positions={[center, headingEnd]} pathOptions={{ color: ownshipColor, weight: 1.2, opacity: .85, dashArray: '7 7' }} />}
 
         {traffic.map((item: TrafficContact) => {
           const isConflict = conflictIds.has(item.callsign);
           const color = isConflict ? '#f2a154' : '#d1d5c9';
           return (
-            <Marker key={item.callsign} position={[item.lat, item.lon]} icon={aircraftIcon(item.heading, color)}>
+            <Marker key={item.callsign} position={[item.lat, item.lon]} icon={aircraftIcon(item.heading, color)} zIndexOffset={selectedCallsign === item.callsign ? 900 : 0} eventHandlers={{ click: () => onSelectCallsign?.(item.callsign) }}>
               <Popup>
                 <div className="mono">
                   <strong style={{ color }}>{item.callsign}</strong><br />
@@ -176,6 +192,7 @@ export default function MapView({ sim }: Props) {
                   {item.range_nm.toFixed(1)} NM · SQK {item.squawk}
                 </div>
               </Popup>
+              {selectedCallsign === item.callsign && <Circle center={[item.lat, item.lon]} radius={1_850} pathOptions={{ color: '#c9ff18', fillOpacity: .025, weight: 1.5, dashArray: '4 5' }} />}
             </Marker>
           );
         })}
@@ -204,6 +221,13 @@ export default function MapView({ sim }: Props) {
 
       <div className="map-hud map-hud--top">
         <button className={`icon-button ${follow ? 'is-active' : ''}`} type="button" onClick={() => setFollow(true)} aria-label="Follow ownship" title="Follow ownship"><Navigation aria-hidden="true" /></button>
+        <div className="surveillance-controls" aria-label="Map layers and traffic filters">
+          <button className={filters.showTraffic ? 'is-active' : ''} type="button" aria-pressed={filters.showTraffic} onClick={() => onFiltersChange?.({ showTraffic: !filters.showTraffic })}>Traffic</button>
+          <button className={filters.conflictsOnly ? 'is-active is-warning' : ''} type="button" aria-pressed={filters.conflictsOnly} onClick={() => onFiltersChange?.({ conflictsOnly: !filters.conflictsOnly, showTraffic: true })}>Conflicts</button>
+          <label><span className="sr-only">Traffic altitude band</span><select value={filters.altitudeBand} onChange={(event) => onFiltersChange?.({ altitudeBand: event.target.value as SurveillanceFilters['altitudeBand'] })}><option value="all">All levels</option><option value="low">Below 10,000 ft</option><option value="mid">10,000–23,999 ft</option><option value="high">24,000 ft and above</option></select></label>
+          <button className={filters.showRoute ? 'is-active' : ''} type="button" aria-pressed={filters.showRoute} onClick={() => onFiltersChange?.({ showRoute: !filters.showRoute })}>Route</button>
+          <button className={filters.showTrail ? 'is-active' : ''} type="button" aria-pressed={filters.showTrail} onClick={() => onFiltersChange?.({ showTrail: !filters.showTrail })}>Trail</button>
+        </div>
       </div>
       <div className="map-hud map-hud--bottom">
         <div className="map-readout">

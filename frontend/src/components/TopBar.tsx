@@ -6,9 +6,11 @@ import {
   PanelLeft,
   PanelRight,
   Route,
+  Search,
   Settings,
   ShieldAlert,
   Sun,
+  Users,
 } from 'lucide-react';
 import { useTheme } from '../context/theme';
 
@@ -25,6 +27,11 @@ interface TopBarProps {
   onFlightPanelToggle: () => void;
   onCopilotToggle: () => void;
   onNotificationsOpen?: () => void;
+  onCommandPaletteOpen?: () => void;
+  alertCount?: number;
+  activeRoomId?: string;
+  activeRoomName?: string;
+  onRoomManagerOpen?: () => void;
 }
 
 export default function TopBar({
@@ -40,6 +47,11 @@ export default function TopBar({
   onFlightPanelToggle,
   onCopilotToggle,
   onNotificationsOpen,
+  onCommandPaletteOpen,
+  alertCount = 0,
+  activeRoomId = 'default',
+  activeRoomName = 'Default room',
+  onRoomManagerOpen,
 }: TopBarProps) {
   const { theme, toggleTheme } = useTheme();
   const [now, setNow] = useState(() => new Date());
@@ -63,7 +75,7 @@ export default function TopBar({
           <PanelLeft aria-hidden="true" />
         </button>
         <div className="brand-mark" aria-hidden="true"><Grid2X2 /></div>
-        <span className="brand-name">SKYCOMMAND</span>
+        <span className="brand-name">SMART ATC</span>
         <span className="mode-badge"><span className="mode-dot" />{emergencyActive ? 'Emergency mode' : modeLabel}</span>
       </div>
 
@@ -73,6 +85,7 @@ export default function TopBar({
       </div>
 
       <div className="top-actions">
+        {onRoomManagerOpen && <button className="active-room-chip" type="button" onClick={onRoomManagerOpen} title={`Manage training rooms — ${activeRoomId}`} aria-label={`Manage training rooms. Active room ${activeRoomName}`}><Users aria-hidden="true" /><span><small>Active room</small><strong>{activeRoomName}</strong></span><code>{activeRoomId === 'default' ? 'DEFAULT' : activeRoomId.slice(0, 8)}</code></button>}
         <div className={`top-health ${freshness.className}`} role="status" aria-live="polite">
           <span className="health-dot" />
           <span>{freshness.label}</span>
@@ -84,8 +97,12 @@ export default function TopBar({
         <button className={`icon-button ${emergencyActive ? 'is-active is-danger' : ''}`} type="button" title="Emergency scenarios" aria-label="Open emergency scenarios" onClick={onEmergencyOpen}>
           <ShieldAlert aria-hidden="true" />
         </button>
-        <button className="icon-button" type="button" title="Notifications" aria-label="View alerts" onClick={onNotificationsOpen || onEmergencyOpen}>
+        {onCommandPaletteOpen && <button className="icon-button top-command-button" type="button" title="Command palette (Ctrl K)" aria-label="Open command palette" onClick={onCommandPaletteOpen}>
+          <Search aria-hidden="true" />
+        </button>}
+        <button className={`icon-button top-alert-button ${alertCount > 0 ? 'has-alerts' : ''}`} type="button" title="Operational alerts" aria-label={`View operational alerts, ${alertCount} unacknowledged`} onClick={onNotificationsOpen || onEmergencyOpen}>
           <Bell aria-hidden="true" />
+          {alertCount > 0 && <span className="top-alert-badge" aria-hidden="true">{alertCount > 99 ? '99+' : alertCount}</span>}
         </button>
         <button className="icon-button" type="button" title="Settings" aria-label="Open settings" onClick={onSettingsOpen}>
           <Settings aria-hidden="true" />
@@ -93,7 +110,7 @@ export default function TopBar({
         <button className="icon-button" type="button" title={`Use ${theme === 'dark' ? 'warm light' : 'dark'} theme`} aria-label={`Use ${theme === 'dark' ? 'warm light' : 'dark'} theme`} onClick={toggleTheme}>
           {theme === 'dark' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
         </button>
-        <button className="icon-button mobile-panel-button" type="button" aria-label="Toggle AI copilot" onClick={onCopilotToggle}>
+        <button className="icon-button mobile-panel-button" type="button" aria-label="Toggle ATC copilot" onClick={onCopilotToggle}>
           <PanelRight aria-hidden="true" />
         </button>
       </div>

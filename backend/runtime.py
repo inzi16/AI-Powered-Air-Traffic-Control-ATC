@@ -7,6 +7,7 @@ import json
 import math
 import time
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,12 +16,16 @@ try:
     from .conflicts import predict_conflicts
     from .emergencies import EmergencyManager
     from .flight_phase import FlightPhaseDetector
+    from .journal import InMemoryEventJournal
     from .navigation import AirportCatalog, AirportResolutionError, RouteAutopilot
     from .schemas import (
         Alert,
+        AlertAcknowledgement,
         Clearance,
         DemoStateUpdate,
+        EventEnvelope,
         EventMetadata,
+        ScenarioControlState,
         Severity,
         Snapshot,
         SourceKind,
@@ -34,8 +39,12 @@ except ImportError:  # pragma: no cover
     from conflicts import predict_conflicts
     from emergencies import EmergencyManager
     from flight_phase import FlightPhaseDetector
+    from journal import InMemoryEventJournal
     from navigation import AirportCatalog, AirportResolutionError, RouteAutopilot
-    from schemas import Alert, Clearance, DemoStateUpdate, EventMetadata, Severity, Snapshot, SourceKind, SCHEMA_VERSION
+    from schemas import (
+        Alert, AlertAcknowledgement, Clearance, DemoStateUpdate, EventEnvelope, EventMetadata,
+        ScenarioControlState, Severity, Snapshot, SourceKind, SCHEMA_VERSION,
+    )
     from sim_engine import SimEngine
     from traffic import TrafficEngine
     from weather import WeatherEngine
@@ -98,11 +107,19 @@ class SimulationRuntime:
         self.route = RouteAutopilot()
         self.emergencies = EmergencyManager()
         self.clearances = ClearanceManager()
+        self.alert_acknowledgements: dict[str, AlertAcknowledgement] = {}
         self.engine = SimEngine(self.state, get_wind=self.weather.get_wind)
         self.sim_reader = sim_reader
         self.session_id = str(uuid.uuid4())
         self.sequence = 0
+        self.state_revision = 0
+        self._sequence_revisions: OrderedDict[int, int] = OrderedDict()
+        self._max_sequence_revision_history = 2_048
         self.event_sequence = 0
+        self.paused = False
+        self.time_scale = 1.0
+        self.simulation_time_seconds = 0.0
+        self.control_changed_at = utc_now()
         self.callsign = ""
         self.active_scenario = ""
         self.source = SourceKind.DEMO
@@ -121,6 +138,8 @@ class SimulationRuntime:
         self.lock = asyncio.Lock()
         self.traffic.reset_around(self.state["lat"], self.state["lon"], self.state["altitude"])
         self.tick_once(0.0)
+        self.journal = InMemoryEventJournal()
+        self.journal.start_session(self.session_id, self.current_snapshot(), self.simulation_time_seconds)
 
     async def start(self) -> None:
         if self.running:
@@ -145,7 +164,7 @@ class SimulationRuntime:
             await asyncio.sleep(max(0.0, deadline - time.monotonic()))
             started = time.perf_counter()
             external = None
-            if self.sim_reader is not None and not self.route.autopilot_engaged:
+            if self.sim_reader is not None and not self.route.autopilot_engaged and not self.paused:
                 try:
                     external = await asyncio.wait_for(asyncio.to_thread(self.sim_reader.get_state), timeout=0.15)
                 except (asyncio.TimeoutError, Exception):
@@ -167,14 +186,18 @@ class SimulationRuntime:
     ) -> Snapshot:
         """Advance and compose exactly one immutable snapshot."""
         server_time = now or utc_now()
-        source = SourceKind.DEMO
-        if external_state and external_state.get("connected") and not self.route.autopilot_engaged:
+        source = self.source if self.paused else SourceKind.DEMO
+        active_scale = self.route.time_scale if self.route.autopilot_engaged else self.time_scale
+        simulated_dt = 0.0 if self.paused else max(0.0, dt) * active_scale
+        self.simulation_time_seconds += simulated_dt
+        if self.paused:
+            self.observed_at = server_time
+        elif external_state and external_state.get("connected") and not self.route.autopilot_engaged:
             self._apply_external_state(external_state)
             source = SourceKind.SIMCONNECT
             self.observed_at = _coerce_observed_time(external_state.get("observed_at"), server_time)
         else:
             self.observed_at = server_time
-            simulated_dt = max(0.0, dt) * (self.route.time_scale if self.route.autopilot_engaged else 1.0)
             effects = self.emergencies.effects()
             targets = self.route.targets(self.state, simulated_dt, effects)
             max_distance = None
@@ -204,6 +227,15 @@ class SimulationRuntime:
         self.last_tick_monotonic = time.monotonic()
         self._snapshot = self._compose_snapshot(server_time)
         self._snapshot_json = self._snapshot.model_dump_json()
+        self._sequence_revisions[self.sequence] = self.state_revision
+        while len(self._sequence_revisions) > self._max_sequence_revision_history:
+            self._sequence_revisions.popitem(last=False)
+        if hasattr(self, "journal"):
+            self.journal.advance_head(
+                self.session_id,
+                snapshot_sequence=self.sequence,
+                simulation_time_seconds=self.simulation_time_seconds,
+            )
         self._publish(self._snapshot_json)
         return self._snapshot.model_copy(deep=True)
 
@@ -242,15 +274,21 @@ class SimulationRuntime:
         emergency = self.emergencies.refresh(self.state)
         alerts: list[Alert] = []
         if emergency and emergency.status != "resolved":
+            alert_id = f"emergency:{emergency.emergency_id}"
+            acknowledgement = self.alert_acknowledgements.get(alert_id)
             alerts.append(Alert(
-                alert_id=f"emergency:{emergency.emergency_id}",
+                alert_id=alert_id,
                 category="emergency",
                 severity=emergency.severity,
                 title=emergency.title,
                 message=emergency.alert_message,
                 created_at=emergency.declared_at,
+                acknowledged=bool(acknowledgement and acknowledgement.acknowledged),
+                acknowledged_at=acknowledgement.acknowledged_at if acknowledgement else None,
+                acknowledged_by=acknowledgement.acknowledged_by if acknowledgement else None,
             ))
         for conflict in conflicts:
+            acknowledgement = self.alert_acknowledgements.get(conflict.conflict_id)
             alerts.append(Alert(
                 alert_id=conflict.conflict_id,
                 category="traffic",
@@ -261,6 +299,9 @@ class SimulationRuntime:
                     f"in {conflict.time_to_cpa_seconds}s. {conflict.advisory}"
                 ),
                 created_at=server_time,
+                acknowledged=bool(acknowledgement and acknowledgement.acknowledged),
+                acknowledged_at=acknowledgement.acknowledged_at if acknowledgement else None,
+                acknowledged_by=acknowledgement.acknowledged_by if acknowledgement else None,
             ))
         data_age_ms = max(0, int((server_time - self.observed_at).total_seconds() * 1000.0))
         snapshot_id = f"{self.session_id}:{self.sequence}"
@@ -268,6 +309,7 @@ class SimulationRuntime:
             schema_version=SCHEMA_VERSION,
             session_id=self.session_id,
             sequence=self.sequence,
+            state_revision=self.state_revision,
             snapshot_id=snapshot_id,
             observed_at=self.observed_at,
             server_time=server_time,
@@ -293,6 +335,7 @@ class SimulationRuntime:
             clearances=self.clearances.list(),
             emergency_active=bool(emergency and emergency.status != "resolved"),
             active_scenario=self.active_scenario,
+            scenario_control=self.control_state(snapshot_sequence=self.sequence),
         )
 
     def current_snapshot(self) -> Snapshot:
@@ -335,12 +378,104 @@ class SimulationRuntime:
             event_type=event_type,
             session_id=self.session_id,
             sequence=self.sequence,
+            state_revision=self.state_revision,
             event_sequence=self.event_sequence,
             observed_at=self.observed_at,
             server_time=now,
             source=self.source,
             data_age_ms=data_age,
         )
+
+    def record_event(self, event_type: str, data: dict[str, Any]) -> EventEnvelope:
+        """Create and retain one immutable semantic event for the current session."""
+        metadata = self.event(event_type)
+        self.journal.append(metadata, data, self.current_snapshot(), self.simulation_time_seconds)
+        return EventEnvelope(event=metadata, data=data)
+
+    def advance_state_revision(self) -> int:
+        """Commit one semantic mutation independently of transport heartbeat ticks."""
+        self.state_revision += 1
+        return self.state_revision
+
+    def revision_for_sequence(self, sequence: int) -> int | None:
+        """Resolve the semantic revision carried by a recently delivered snapshot."""
+        return self._sequence_revisions.get(sequence)
+
+    def control_state(self, *, snapshot_sequence: int | None = None) -> ScenarioControlState:
+        scale = self.route.time_scale if self.route.autopilot_engaged else self.time_scale
+        return ScenarioControlState(
+            session_id=self.session_id,
+            status="paused" if self.paused else "running",
+            paused=self.paused,
+            time_scale=scale,
+            simulation_time_seconds=round(self.simulation_time_seconds, 3),
+            changed_at=self.control_changed_at,
+            snapshot_sequence=self.sequence if snapshot_sequence is None else snapshot_sequence,
+        )
+
+    def set_control(
+        self,
+        *,
+        paused: bool | None = None,
+        time_scale: float | None = None,
+    ) -> ScenarioControlState:
+        changed = False
+        if paused is not None and paused != self.paused:
+            self.paused = paused
+            changed = True
+        if time_scale is not None:
+            bounded = max(0.25, min(120.0, float(time_scale)))
+            if bounded != self.time_scale or (self.route.route_id and bounded != self.route.time_scale):
+                self.time_scale = bounded
+                if self.route.route_id:
+                    self.route.time_scale = bounded
+                changed = True
+        if changed:
+            self.control_changed_at = utc_now()
+        return self.control_state()
+
+    def set_alert_acknowledgement(
+        self,
+        alert_id: str,
+        *,
+        acknowledged: bool,
+        actor: str,
+    ) -> tuple[AlertAcknowledgement, bool]:
+        """Persist acknowledgement state for a currently active stable alert ID."""
+        if not any(alert.alert_id == alert_id for alert in self.current_snapshot().alerts):
+            raise KeyError(alert_id)
+        existing = self.alert_acknowledgements.get(alert_id)
+        effective = bool(existing and existing.acknowledged)
+        if existing and effective == acknowledged:
+            return existing.model_copy(deep=True), False
+        if not existing and not acknowledged:
+            now = utc_now()
+            acknowledgement = AlertAcknowledgement(
+                alert_id=alert_id,
+                acknowledged=False,
+                updated_at=now,
+            )
+            self.alert_acknowledgements[alert_id] = acknowledgement
+            self._bound_alert_acknowledgements()
+            return acknowledgement.model_copy(deep=True), False
+
+        now = utc_now()
+        acknowledgement = AlertAcknowledgement(
+            alert_id=alert_id,
+            acknowledged=acknowledged,
+            acknowledged_at=now if acknowledged else None,
+            acknowledged_by=actor if acknowledged else None,
+            updated_at=now,
+        )
+        self.alert_acknowledgements.pop(alert_id, None)
+        self.alert_acknowledgements[alert_id] = acknowledgement
+        self._bound_alert_acknowledgements()
+        return acknowledgement.model_copy(deep=True), effective != acknowledged
+
+    def _bound_alert_acknowledgements(self) -> None:
+        while len(self.alert_acknowledgements) > 500:
+            oldest = next(iter(self.alert_acknowledgements))
+            del self.alert_acknowledgements[oldest]
 
     def accept_clearance(self, clearance_id: str, readback: str) -> Clearance:
         clearance = self.clearances.accept(clearance_id, readback)
@@ -395,6 +530,13 @@ class SimulationRuntime:
             self.state["heading_mag"] %= 360.0
 
     def reset(self) -> Snapshot:
+        self.advance_state_revision()
+        previous_session_id = self.session_id
+        self.journal.close_session(
+            previous_session_id,
+            snapshot_sequence=self.sequence,
+            simulation_time_seconds=self.simulation_time_seconds,
+        )
         self.state.clear()
         self.state.update(DEFAULT_STATE)
         self.engine.reset_targets()
@@ -402,17 +544,25 @@ class SimulationRuntime:
         self.route = RouteAutopilot()
         self.emergencies.reset()
         self.clearances.reset()
+        self.alert_acknowledgements.clear()
         self.callsign = ""
         self.active_scenario = ""
         self.session_id = str(uuid.uuid4())
         self.sequence = 0
+        self._sequence_revisions.clear()
         self.event_sequence = 0
+        self.paused = False
+        self.time_scale = 1.0
+        self.simulation_time_seconds = 0.0
+        self.control_changed_at = utc_now()
         self.source = SourceKind.DEMO
         self.observed_at = utc_now()
         self._manual_phase = None
         self._manual_takeoff = False
         self.traffic.reset_around(self.state["lat"], self.state["lon"], self.state["altitude"])
-        return self.tick_once(0.0)
+        snapshot = self.tick_once(0.0)
+        self.journal.start_session(self.session_id, snapshot, self.simulation_time_seconds)
+        return snapshot
 
     def health(self) -> dict[str, Any]:
         age_seconds = max(0.0, time.monotonic() - self.last_tick_monotonic) if self.last_tick_monotonic else math.inf
@@ -423,12 +573,19 @@ class SimulationRuntime:
             "schema_version": SCHEMA_VERSION,
             "session_id": self.session_id,
             "sequence": self.sequence,
+            "state_revision": self.state_revision,
             "source": self.source.value,
             "data_age_ms": self.current_snapshot().data_age_ms,
             "runtime_running": self.running,
             "tick_hz": self.tick_hz,
             "last_tick_duration_ms": round(self.last_tick_duration_ms, 2),
             "connected_clients": len(self._subscribers),
+            "scenario_control": self.control_state().model_dump(mode="json"),
+            "journal": {
+                "storage_backend": "memory",
+                "retained_sessions": len(self.journal.list_sessions(limit=self.journal.max_sessions)),
+                "retained_events": self.journal.session(self.session_id).retained_event_count,
+            },
             "airport_catalog_count": self.catalog.count,
             "simconnect_enabled": self.sim_reader is not None,
             "sim_available": self.sim_reader is not None,

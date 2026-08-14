@@ -11,6 +11,21 @@ import os
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
 
+
+def _ollama_timeout_seconds() -> float:
+    """Keep model latency below the 60-second reverse-proxy deadline."""
+
+    try:
+        configured = float(os.environ.get("OLLAMA_HTTP_TIMEOUT_SECONDS", "45"))
+    except ValueError:
+        return 45.0
+    if not math.isfinite(configured):
+        return 45.0
+    return max(1.0, min(55.0, configured))
+
+
+OLLAMA_HTTP_TIMEOUT_SECONDS = _ollama_timeout_seconds()
+
 # Load airports database
 _airports_path = os.path.join(os.path.dirname(__file__), "airports.json")
 with open(_airports_path, "r", encoding="utf-8") as f:
@@ -241,25 +256,30 @@ class ATCBrain:
         return "\n".join(lines)
 
     async def chat(self, message: str, flight_state: dict, phase_info: dict) -> str:
+        """Generate one reply without mutating committed conversation history.
+
+        The authoritative API commits the exchange only after its session and
+        semantic-revision guard succeeds.  Callers therefore cannot leave a
+        stale user/assistant pair in later model context.
+        """
+
         nearest = find_nearest_airport(
             flight_state.get("lat", 0),
             flight_state.get("lon", 0)
         )
         context = self._build_context(flight_state, phase_info, nearest)
 
-        self.conversation_history.append({"role": "user", "content": message})
-
-        # Trim history
-        if len(self.conversation_history) > self.max_history:
-            self.conversation_history = self.conversation_history[-self.max_history:]
+        pending_history = [dict(item) for item in self.conversation_history]
+        pending_history.append({"role": "user", "content": message})
+        pending_history = pending_history[-self.max_history:]
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + context},
-            *self.conversation_history,
+            *pending_history,
         ]
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=OLLAMA_HTTP_TIMEOUT_SECONDS) as client:
                 resp = await client.post(
                     f"{OLLAMA_URL}/api/chat",
                     json={
@@ -282,11 +302,18 @@ class ATCBrain:
             reply = self._fallback_response(message, flight_state, phase_info, nearest)
 
         reply = self._enforce_brevity(reply)
-
-        if reply:
-            self.conversation_history.append({"role": "assistant", "content": reply})
-
         return reply
+
+    def commit_exchange(self, message: str, reply: str) -> None:
+        """Atomically retain a revision-validated conversation exchange."""
+
+        exchange = [{"role": "user", "content": message}]
+        if reply:
+            exchange.append({"role": "assistant", "content": reply})
+        self.conversation_history = [
+            *self.conversation_history,
+            *exchange,
+        ][-self.max_history:]
 
     @staticmethod
     def _enforce_brevity(text: str) -> str:

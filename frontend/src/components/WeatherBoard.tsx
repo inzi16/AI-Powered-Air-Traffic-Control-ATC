@@ -8,7 +8,7 @@ export default function WeatherBoard({ sim }: { sim: SimData }) {
       <div className="empty-canvas">
         <Cloud aria-hidden="true" />
         <h2>Weather feed unavailable</h2>
-        <p>The simulator has not supplied a weather observation. Route guidance will not invent wind or visibility.</p>
+        <p>The training runtime has not supplied a weather observation. Route guidance will not invent wind or visibility.</p>
       </div>
     );
   }

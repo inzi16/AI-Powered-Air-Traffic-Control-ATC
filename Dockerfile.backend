@@ -3,12 +3,21 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     ATC_HOST=0.0.0.0 \
-    ATC_PORT=8000
+    ATC_PORT=8000 \
+    HF_HOME=/var/lib/atc/models \
+    XDG_CACHE_HOME=/var/lib/atc/cache
 
 WORKDIR /app
-COPY backend/requirements-core.txt /app/backend/requirements-core.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements-core.txt
+COPY backend/requirements-core.txt backend/requirements-ai.txt /app/backend/
+RUN pip install --no-cache-dir \
+    -r /app/backend/requirements-core.txt \
+    -r /app/backend/requirements-ai.txt
 COPY backend /app/backend
+RUN addgroup --system atc \
+    && adduser --system --ingroup atc --home /nonexistent --no-create-home atc \
+    && install -d -o atc -g atc /var/lib/atc/models /var/lib/atc/cache
+
+USER atc
 
 EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

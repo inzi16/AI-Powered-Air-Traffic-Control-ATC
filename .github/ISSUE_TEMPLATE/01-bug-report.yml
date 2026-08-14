@@ -1,0 +1,104 @@
+name: Bug report
+description: Report a reproducible Smart ATC defect or regression.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Smart ATC. This project is for simulation and training only.
+
+        Do not disclose vulnerabilities, credentials, personal information, or real operational aviation data here. Follow the private-reporting guidance in `SECURITY.md` for security issues.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checks
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: This report does not contain a security vulnerability or sensitive data.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Select the area closest to the failure.
+      options:
+        - Frontend and accessibility
+        - Map or radar
+        - Simulation, route, or flight phase
+        - Emergency or alert workflow
+        - Voice, chat, or AI gateway
+        - Training rooms, replay, or journal
+        - Backend API or WebSocket
+        - Contracts, CI, containers, or setup
+        - Unsure or cross-cutting
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include the smallest deterministic sequence, route/session details, and relevant inputs.
+      placeholder: |
+        1. Start the application with ...
+        2. Create or join ...
+        3. Select ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe the result and state transitions you expected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Describe what happened, including whether a refresh or room switch changed it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include commit/tag, operating system, browser, Python and Node versions, and direct or container setup.
+      placeholder: |
+        Commit or tag:
+        OS:
+        Browser:
+        Python:
+        Node.js:
+        Run mode: direct / Docker Compose
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs
+      description: Paste relevant log or contract output. Remove secrets and sensitive data first.
+      render: shell
+
+  - type: upload
+    id: attachments
+    attributes:
+      label: Screenshots or recordings
+      description: Attach redacted visual evidence when it helps reproduce the problem.
+    validations:
+      required: false
+      accept: ".png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.log,.txt,.json,.zip"
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and frequency
+      description: Note whether this is intermittent, a regression, room-specific, or blocks a demo or verification command.

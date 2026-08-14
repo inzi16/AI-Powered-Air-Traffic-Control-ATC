@@ -340,6 +340,16 @@ export interface DataQuality {
   issues: DataQualityIssue[];
 }
 
+export interface ScenarioControlState {
+  session_id: string;
+  status: 'running' | 'paused';
+  paused: boolean;
+  time_scale: number;
+  simulation_time_seconds: number;
+  changed_at: string;
+  snapshot_sequence: number;
+}
+
 /** Fields consumed by the existing UI plus the richer production model. */
 export interface SimData {
   // Legacy aircraft/simulator fields. These remain required after normalization.
@@ -377,6 +387,7 @@ export interface SimData {
   // Versioned snapshot identity and provenance.
   session_id: string;
   sequence: number;
+  state_revision: number;
   schema: SnapshotSchemaInfo;
   timestamps: SnapshotTimestamps;
   /** Compact aliases retained for components migrating from the legacy model. */
@@ -384,6 +395,7 @@ export interface SimData {
   data_quality: Record<string, string>;
   source_info: SnapshotSourceInfo;
   quality: DataQuality;
+  scenario_control: ScenarioControlState;
 
   // Navigation, operational awareness, and emergency response.
   route_plan: RoutePlan | null;
@@ -417,6 +429,7 @@ export interface SimSnapshotEnvelope {
   sessionId?: string;
   sequence?: number;
   seq?: number;
+  state_revision?: number;
   schema?: SnapshotSchemaInfo | string;
   schema_version?: string | number;
   timestamps?: Partial<SnapshotTimestamps>;
@@ -457,10 +470,14 @@ export interface ConnectionMetadata {
   last_error: ConnectionErrorInfo | null;
   rejected_snapshots: number;
   last_rejection_reason: SnapshotRejectionReason | null;
+  schema_compatible: boolean;
+  schema_error: string | null;
 }
 
 export type SnapshotRejectionReason =
   | 'invalid'
+  | 'schema_version_invalid'
+  | 'schema_version_incompatible'
   | 'duplicate'
   | 'out_of_order'
   | 'stale'
@@ -514,6 +531,7 @@ export function createDefaultSimData(sessionId = 'legacy'): SimData {
     nearest_airport: null,
     session_id: sessionId,
     sequence: 0,
+    state_revision: 0,
     schema: { name: 'atc.sim.snapshot', version: 'legacy' },
     timestamps: {
       server_at: null,
@@ -534,6 +552,15 @@ export function createDefaultSimData(sessionId = 'legacy'): SimData {
       latency_ms: null,
       completeness: null,
       issues: [],
+    },
+    scenario_control: {
+      session_id: sessionId,
+      status: 'running',
+      paused: false,
+      time_scale: 1,
+      simulation_time_seconds: 0,
+      changed_at: DEFAULT_RECEIVED_AT,
+      snapshot_sequence: 0,
     },
     route_plan: null,
     route_progress: null,
@@ -563,5 +590,7 @@ export function createInitialConnectionMetadata(transport: SimTransport): Connec
     last_error: null,
     rejected_snapshots: 0,
     last_rejection_reason: null,
+    schema_compatible: true,
+    schema_error: null,
   };
 }

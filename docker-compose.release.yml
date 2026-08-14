@@ -1,0 +1,65 @@
+services:
+  backend:
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    pids_limit: 256
+    environment:
+      ATC_ENV: production
+      ATC_API_KEY: ${ATC_API_KEY:?Set ATC_API_KEY to a long random value}
+      ATC_ALLOWED_HOSTS: ${ATC_ALLOWED_HOSTS:?Set ATC_ALLOWED_HOSTS to the deployed hostname}
+      ATC_ALLOWED_ORIGINS: ${ATC_ALLOWED_ORIGINS:-http://localhost:8080}
+      ATC_ENABLE_DEV_ENDPOINTS: "false"
+      ATC_ENABLE_SIMCONNECT: ${ATC_ENABLE_SIMCONNECT:-false}
+      ATC_MAX_TRAINING_SESSIONS: ${ATC_MAX_TRAINING_SESSIONS:-25}
+      ATC_SESSION_IDLE_SECONDS: ${ATC_SESSION_IDLE_SECONDS:-3600}
+      ATC_SESSION_MAX_IDLE_SECONDS: ${ATC_SESSION_MAX_IDLE_SECONDS:-86400}
+      ATC_MAX_WS_CLIENTS_PER_SESSION: ${ATC_MAX_WS_CLIENTS_PER_SESSION:-8}
+      ATC_MAX_COMMANDS_PER_SESSION: ${ATC_MAX_COMMANDS_PER_SESSION:-500}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - atc_model_cache:/var/lib/atc
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1g
+          pids: 256
+        reservations:
+          cpus: "0.25"
+          memory: 256m
+
+  frontend:
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 10s
+    pids_limit: 128
+    environment:
+      ATC_API_KEY: ${ATC_API_KEY:?Set ATC_API_KEY to a long random value}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256m
+          pids: 128
+        reservations:
+          cpus: "0.10"
+          memory: 64m
+
+volumes:
+  atc_model_cache:

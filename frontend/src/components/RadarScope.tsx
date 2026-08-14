@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ConflictAlert, SimData, TrafficContact } from '../hooks/useSimData';
+import { DEFAULT_SURVEILLANCE_FILTERS, matchesAltitudeBand, type SurveillanceFilters } from '../types/operations';
 
 type EnrichedConflict = ConflictAlert & {
   cpa_distance_nm?: number;
@@ -13,7 +14,13 @@ type EnrichedSimData = SimData & {
   sequence?: number;
 };
 
-interface Props { sim: EnrichedSimData }
+interface Props {
+  sim: EnrichedSimData;
+  filters?: SurveillanceFilters;
+  onFiltersChange?: (patch: Partial<SurveillanceFilters>) => void;
+  selectedCallsign?: string | null;
+  onSelectCallsign?: (callsign: string | null) => void;
+}
 
 const RANGE_OPTIONS = [10, 25, 50, 100];
 const SCOPE_RADIUS = 41;
@@ -41,28 +48,42 @@ function vectorEnd(x: number, y: number, trackHeading: number, ownHeading: numbe
   return [x + Math.cos(angle) * length, y + Math.sin(angle) * length];
 }
 
-export default function RadarScope({ sim }: Props) {
+export default function RadarScope({
+  sim,
+  filters = DEFAULT_SURVEILLANCE_FILTERS,
+  onFiltersChange,
+  selectedCallsign,
+  onSelectCallsign,
+}: Props) {
   const [rangeNm, setRangeNm] = useState(25);
   const [headUp, setHeadUp] = useState(true);
   const [showVectors, setShowVectors] = useState(true);
-  const [selectedCallsign, setSelectedCallsign] = useState<string | null>(null);
+  const [internalSelection, setInternalSelection] = useState<string | null>(null);
+  const activeSelection = selectedCallsign === undefined ? internalSelection : selectedCallsign;
   const heading = sim.heading_mag || 0;
   const altitude = sim.altitude || 0;
   const conflictByCallsign = useMemo(() => new Map((sim.conflicts || []).map((item) => [item.callsign, item as EnrichedConflict])), [sim.conflicts]);
 
   const tracks = useMemo<PositionedTrack[]>(() => (sim.traffic || [])
+    .filter(() => filters.showTraffic)
     .filter((item) => Number.isFinite(item.range_nm) && item.range_nm <= rangeNm)
+    .filter((item) => !filters.conflictsOnly || conflictByCallsign.has(item.callsign))
+    .filter((item) => matchesAltitudeBand(item.altitude, filters.altitudeBand))
     .sort((a, b) => Number(conflictByCallsign.has(b.callsign)) - Number(conflictByCallsign.has(a.callsign)) || a.range_nm - b.range_nm)
     .slice(0, 40)
     .map((traffic) => {
       const [x, y] = polarPoint(traffic.range_nm, traffic.bearing, rangeNm, heading, headUp);
       const [vectorX, vectorY] = vectorEnd(x, y, traffic.heading, heading, headUp, 4 + Math.min(4, traffic.speed / 120));
       return { traffic, x, y, vectorX, vectorY, conflict: conflictByCallsign.get(traffic.callsign), altitudeDelta: traffic.altitude - altitude };
-    }), [altitude, conflictByCallsign, headUp, heading, rangeNm, sim.traffic]);
+    }), [altitude, conflictByCallsign, filters.altitudeBand, filters.conflictsOnly, filters.showTraffic, headUp, heading, rangeNm, sim.traffic]);
 
   const primaryConflict = (sim.conflicts?.[0] || null) as EnrichedConflict | null;
   const ownshipVector = vectorEnd(50, 50, heading, heading, headUp, 8);
-  const selected = tracks.find((track) => track.traffic.callsign === (selectedCallsign || primaryConflict?.callsign)) || tracks[0];
+  const selected = tracks.find((track) => track.traffic.callsign === (activeSelection || primaryConflict?.callsign)) || tracks[0];
+  const selectCallsign = (callsign: string) => {
+    setInternalSelection(callsign);
+    onSelectCallsign?.(callsign);
+  };
   const cpaGeometry = useMemo(() => {
     const conflictTrack = tracks.find((track) => track.traffic.callsign === primaryConflict?.callsign);
     if (!primaryConflict || !conflictTrack) return null;
@@ -77,7 +98,7 @@ export default function RadarScope({ sim }: Props) {
   return (
     <div className="radar-shell" aria-label={`Surveillance radar, ${rangeNm} nautical mile range`}>
       <svg viewBox="0 0 100 100" role="img" aria-labelledby="radar-title radar-description" preserveAspectRatio="xMidYMid meet">
-        <title id="radar-title">SkyCommand traffic radar</title>
+        <title id="radar-title">Smart ATC traffic radar</title>
         <desc id="radar-description">Ownship centered with nearby traffic positioned by range and bearing. Conflicts use orange and red.</desc>
         <rect x="0" y="0" width="100" height="100" fill="#0d0e0c" />
 
@@ -106,11 +127,11 @@ export default function RadarScope({ sim }: Props) {
         {tracks.map(({ traffic, x, y, vectorX, vectorY, conflict, altitudeDelta }) => {
           const color = conflict?.severity === 'critical' || conflict?.severity === 'resolution' ? '#ff8a75' : conflict ? '#f2a154' : Math.abs(altitudeDelta) < 1_000 ? '#f1ecd5' : '#abada5';
           return (
-            <g key={traffic.callsign} role="button" tabIndex={0} aria-label={`Select ${traffic.callsign}`} onClick={() => setSelectedCallsign(traffic.callsign)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setSelectedCallsign(traffic.callsign); }}>
+            <g key={traffic.callsign} role="button" tabIndex={0} aria-label={`Select ${traffic.callsign}`} onClick={() => selectCallsign(traffic.callsign)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCallsign(traffic.callsign); } }}>
               {showVectors && <line x1={x} y1={y} x2={vectorX} y2={vectorY} stroke={color} strokeWidth={conflict ? '.38' : '.22'} />}
               {showVectors && <line x1={x} y1={y} x2={x - (vectorX - x) * .6} y2={y - (vectorY - y) * .6} stroke="#7a7d74" strokeWidth=".16" strokeDasharray=".7 .7" opacity=".75" />}
               <rect x={x - .65} y={y - .65} width="1.3" height="1.3" transform={`rotate(45 ${x} ${y})`} fill={conflict ? '#0d0e0c' : color} stroke={color} strokeWidth=".32" />
-              {(selectedCallsign || primaryConflict?.callsign) === traffic.callsign && <circle cx={x} cy={y} r="2.8" fill="none" stroke="#c9ff18" strokeWidth=".2" strokeDasharray=".8 .7" />}
+              {(activeSelection || primaryConflict?.callsign) === traffic.callsign && <circle cx={x} cy={y} r="2.8" fill="none" stroke="#c9ff18" strokeWidth=".2" strokeDasharray=".8 .7" />}
               {conflict && <circle className="radar-conflict-pulse" cx={x} cy={y} r="2.1" fill="none" stroke="#ff8a75" strokeWidth=".25" />}
               <g transform={`translate(${x + 1.5} ${y - 2.2})`}>
                 <rect width="10.8" height="6.2" rx=".35" fill="#11120f" stroke={conflict ? '#f2a154' : '#4a4d44'} strokeWidth=".18" />
@@ -154,6 +175,9 @@ export default function RadarScope({ sim }: Props) {
         ))}
         <button className="is-active" type="button" onClick={() => setHeadUp((current) => !current)}>{headUp ? 'HEAD UP' : 'NORTH UP'}</button>
         <button className={showVectors ? 'is-active' : ''} type="button" onClick={() => setShowVectors((current) => !current)} aria-pressed={showVectors}>VECTORS</button>
+        <button className={filters.showTraffic ? 'is-active' : ''} type="button" onClick={() => onFiltersChange?.({ showTraffic: !filters.showTraffic })} aria-pressed={filters.showTraffic}>TRAFFIC</button>
+        <button className={filters.conflictsOnly ? 'is-active is-warning' : ''} type="button" onClick={() => onFiltersChange?.({ conflictsOnly: !filters.conflictsOnly, showTraffic: true })} aria-pressed={filters.conflictsOnly}>CONFLICTS</button>
+        <label className="radar-level-filter"><span className="sr-only">Traffic altitude band</span><select value={filters.altitudeBand} onChange={(event) => onFiltersChange?.({ altitudeBand: event.target.value as SurveillanceFilters['altitudeBand'] })}><option value="all">ALL LEVELS</option><option value="low">BELOW 10K</option><option value="mid">10K–24K</option><option value="high">ABOVE 24K</option></select></label>
       </div>
 
       <div className="radar-legend" aria-label="Radar legend"><span><i className="is-actual" />Actual</span><span><i className="is-predicted" />Predicted</span><span><i className="is-history" />History</span></div>

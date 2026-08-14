@@ -346,7 +346,7 @@ export default function SettingsModal({
             </SettingsSection>
 
             <SettingsSection icon={<BellRing />} title="Cabin intro">
-              <span className="form-help">Sound only starts after you select Enter cockpit.</span>
+              <span className="form-help">Entrance sound starts automatically when browser audio policy permits.</span>
               <ToggleButton checked={soundEnabled} onChange={updateIntroSound} label="Cabin chime" />
             </SettingsSection>
 

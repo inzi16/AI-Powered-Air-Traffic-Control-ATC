@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ApiError,
   fetchSimState,
-  SIM_STATE_WS_URL,
+  resolveSimStateWebSocketUrl,
   toConnectionErrorInfo,
 } from '../api';
 import {
   SimSnapshotGate,
+  snapshotSchemaRejectionMessage,
   subscribeToSimSessionInvalidation,
 } from '../state/simState';
 import {
@@ -17,6 +18,11 @@ import {
   type SimHookResult,
   type SnapshotRejectionReason,
 } from '../types/sim';
+import {
+  DEFAULT_TRAINING_SESSION_ID,
+  reportTrainingSessionUnavailable,
+  useActiveTrainingSessionId,
+} from '../state/trainingSession';
 
 const MIN_RECONNECT_MS = 500;
 const MAX_RECONNECT_MS = 15_000;
@@ -35,6 +41,7 @@ function websocketError(code: string, message: string): ConnectionErrorInfo {
 }
 
 export function useSimStream(): SimHookResult {
+  const activeTrainingSessionId = useActiveTrainingSessionId();
   const gateRef = useRef(new SimSnapshotGate());
   const [data, setData] = useState<SimData>(() => gateRef.current.current);
   const [connection, setConnection] = useState<ConnectionMetadata>(() =>
@@ -54,11 +61,12 @@ export function useSimStream(): SimHookResult {
     resyncRequestRef.current = controller;
 
     try {
-      const payload = await fetchSimState({ signal: controller.signal });
+      const payload = await fetchSimState({ signal: controller.signal, trainingSessionId: activeTrainingSessionId });
       if (!mountedRef.current || resyncRequestRef.current !== controller) return;
       restReachableRef.current = true;
       const result = gateRef.current.accept(payload, {
         transport: 'polling',
+        trainingSessionId: activeTrainingSessionId,
         expectedRevision,
       });
 
@@ -73,17 +81,25 @@ export function useSimStream(): SimHookResult {
           last_message_at: new Date(receivedAtMs).toISOString(),
           last_message_at_ms: receivedAtMs,
           last_error: socketOnlineRef.current ? null : previous.last_error,
+          schema_compatible: true,
+          schema_error: null,
         }));
       } else {
+        const schemaError = snapshotSchemaRejectionMessage(result.reason);
         setConnection(previous => ({
           ...previous,
           backend_online: true,
           rejected_snapshots: previous.rejected_snapshots + 1,
           last_rejection_reason: result.reason,
+          ...(schemaError ? { schema_compatible: false, schema_error: schemaError } : {}),
         }));
       }
     } catch (error) {
       if (!mountedRef.current || (error instanceof ApiError && error.code === 'ABORTED')) return;
+      if (error instanceof ApiError && error.status === 404 && activeTrainingSessionId !== DEFAULT_TRAINING_SESSION_ID) {
+        reportTrainingSessionUnavailable(error.message);
+        return;
+      }
       restReachableRef.current = false;
       setConnection(previous => ({
         ...previous,
@@ -94,10 +110,17 @@ export function useSimStream(): SimHookResult {
     } finally {
       if (resyncRequestRef.current === controller) resyncRequestRef.current = null;
     }
-  }, []);
+  }, [activeTrainingSessionId]);
 
   useEffect(() => {
     mountedRef.current = true;
+    resyncRequestRef.current?.abort();
+    restReachableRef.current = false;
+    socketOnlineRef.current = false;
+    const resetState = gateRef.current.reset();
+    setData(resetState);
+    setClock(Date.now());
+    setConnection(createInitialConnectionMetadata('websocket'));
     let cancelled = false;
     let reconnectTimer: number | null = null;
     let connectTimer: number | null = null;
@@ -116,10 +139,12 @@ export function useSimStream(): SimHookResult {
     };
 
     const recordRejection = (reason: SnapshotRejectionReason) => {
+      const schemaError = snapshotSchemaRejectionMessage(reason);
       setConnection(previous => ({
         ...previous,
         rejected_snapshots: previous.rejected_snapshots + 1,
         last_rejection_reason: reason,
+        ...(schemaError ? { schema_compatible: false, schema_error: schemaError } : {}),
       }));
     };
 
@@ -133,7 +158,7 @@ export function useSimStream(): SimHookResult {
         return;
       }
 
-      const result = gateRef.current.accept(payload, { transport: 'websocket' });
+      const result = gateRef.current.accept(payload, { transport: 'websocket', trainingSessionId: activeTrainingSessionId });
       if (!result.accepted) {
         recordRejection(result.reason);
         return;
@@ -155,6 +180,8 @@ export function useSimStream(): SimHookResult {
         last_message_at_ms: receivedAtMs,
         next_retry_at: null,
         last_error: null,
+        schema_compatible: true,
+        schema_error: null,
       }));
     };
 
@@ -196,7 +223,7 @@ export function useSimStream(): SimHookResult {
       }));
 
       try {
-        const socket = new WebSocket(SIM_STATE_WS_URL);
+        const socket = new WebSocket(resolveSimStateWebSocketUrl(activeTrainingSessionId));
         socketRef.current = socket;
         socketOnlineRef.current = false;
         openedAtMs = null;
@@ -254,6 +281,11 @@ export function useSimStream(): SimHookResult {
           openedAtMs = null;
           lastStreamMessageAtMs = null;
           if (cancelled) return;
+
+          if (event.code === 4404 && activeTrainingSessionId !== DEFAULT_TRAINING_SESSION_ID) {
+            reportTrainingSessionUnavailable(event.reason || 'The room was not found or expired.');
+            return;
+          }
 
           const disconnectedAt = new Date().toISOString();
           setConnection(previous => ({
@@ -349,7 +381,7 @@ export function useSimStream(): SimHookResult {
       socketOnlineRef.current = false;
       if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, 'Component unmounted');
     };
-  }, [resync]);
+  }, [activeTrainingSessionId, resync]);
 
   const dataAgeMs = connection.last_message_at_ms === null
     ? null

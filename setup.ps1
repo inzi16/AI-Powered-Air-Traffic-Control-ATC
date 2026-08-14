@@ -15,7 +15,7 @@ function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
 }
 
-Write-Host 'SkyCommand local setup' -ForegroundColor Green
+Write-Host 'Smart Air Traffic Control (ATC) local setup' -ForegroundColor Green
 Write-Host 'Simulation and training use only.' -ForegroundColor DarkYellow
 
 Write-Step 'Checking prerequisites'
@@ -33,6 +33,7 @@ if (-not (Test-Path -LiteralPath $venvRoot)) {
 $pythonExe = Join-Path $venvRoot 'Scripts\python.exe'
 & $pythonExe -m pip install --upgrade pip
 & $pythonExe -m pip install -r (Join-Path $backendRoot 'requirements-core.txt')
+& $pythonExe -m pip install -r (Join-Path $backendRoot 'requirements-dev.txt')
 if (-not $SkipAI) {
     & $pythonExe -m pip install -r (Join-Path $backendRoot 'requirements-ai.txt')
 }
@@ -67,6 +68,6 @@ Start-Process powershell -ArgumentList '-NoExit', '-Command', $frontendCommand
 Start-Sleep -Seconds 2
 Start-Process 'http://127.0.0.1:5173'
 
-Write-Host "`nSkyCommand: http://127.0.0.1:5173" -ForegroundColor Green
+Write-Host "`nSMART ATC: http://127.0.0.1:5173" -ForegroundColor Green
 Write-Host 'API docs:  http://127.0.0.1:8000/docs' -ForegroundColor Green
 Write-Host 'Use Ctrl+C in each server window to stop.' -ForegroundColor DarkGray

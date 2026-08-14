@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -10,7 +10,7 @@ import {
   Sparkles,
   Waypoints,
 } from 'lucide-react';
-import { acceptClearance, fetchTTS, sendChat, sendSTT } from '../api';
+import { acceptClearance, ApiError, fetchTTS, sendChat, sendSTT } from '../api';
 import { usePTT } from '../hooks/usePTT';
 import { useRecorder } from '../hooks/useRecorder';
 import type { SimData } from '../hooks/useSimData';
@@ -51,6 +51,7 @@ interface ChatPanelProps {
   micDeviceId: string;
   speakerDeviceId?: string;
   pttEnabled?: boolean;
+  readOnly?: boolean;
   onCallsignUpdate?: (callsign: string) => void;
   onApplyAdvisory?: (advisory: Advisory) => Promise<void> | void;
   onEmergencyAction?: (actionId: string) => Promise<void> | void;
@@ -67,6 +68,7 @@ export default function ChatPanel({
   micDeviceId,
   speakerDeviceId = '',
   pttEnabled = true,
+  readOnly = false,
   onCallsignUpdate,
   onApplyAdvisory,
   onEmergencyAction,
@@ -93,7 +95,6 @@ export default function ChatPanel({
         title: next?.label || 'Monitor emergency state',
         action: next?.description || 'Continue the emergency checklist',
         rationale: [`${sim.active_emergency.title || sim.active_emergency.type || 'Emergency'} mode is active`, 'Complete actions in priority order', 'Reassess after every state change'],
-        confidence: 1,
         sources: ['Deterministic emergency workflow', 'Simulator telemetry'],
         severity: 'emergency',
       };
@@ -104,7 +105,7 @@ export default function ChatPanel({
       title: backendAdvisory.title,
       action: backendAdvisory.message,
       rationale: [backendAdvisory.message],
-      confidence: .88,
+      ...(typeof backendAdvisory.confidence === 'number' ? { confidence: backendAdvisory.confidence } : {}),
       sources: [backendAdvisory.source],
       severity: backendAdvisory.severity,
     };
@@ -115,7 +116,6 @@ export default function ChatPanel({
         title: `Monitor ${conflict.callsign}`,
         action: 'Await validated resolution guidance',
         rationale: [`Current separation ${conflict.range_nm.toFixed(1)} NM`, `Vertical difference ${Math.round(conflict.alt_diff_ft)} ft`, 'No maneuver is committed without validation'],
-        confidence: .72,
         sources: ['Conflict monitor', 'Traffic snapshot'],
         severity: 'warning',
       };
@@ -125,7 +125,6 @@ export default function ChatPanel({
       title: sim.phase === 'UNKNOWN' ? 'Connect or plan a flight' : `Continue ${sim.phase_label || sim.phase}`,
       action: sim.phase === 'UNKNOWN' ? 'Start a global route demo to activate flight intelligence' : 'Maintain the current validated flight plan',
       rationale: sim.phase === 'UNKNOWN' ? ['No authoritative flight is active'] : ['No immediate conflict detected', 'Telemetry is within the expected envelope'],
-      confidence: sim.phase === 'UNKNOWN' ? .45 : .9,
       sources: ['Rules-derived phase state', 'Telemetry-derived separation state'],
       severity: 'normal',
     };
@@ -167,7 +166,7 @@ export default function ChatPanel({
 
   const handleSend = useCallback(async (override?: string) => {
     const message = (override ?? inputRef.current).trim();
-    if (!message || loadingRef.current) return;
+    if (!message || loadingRef.current || readOnly) return;
     loadingRef.current = true;
     playMessageSent();
     addMessage('pilot', message);
@@ -186,12 +185,13 @@ export default function ChatPanel({
       playATCResponse();
       await playReply(reply);
     } catch (error) {
+      if (error instanceof ApiError && error.code === 'ABORTED') return;
       addMessage('system', error instanceof Error ? error.message : 'ATC service is unavailable. Your flight state was not changed.');
     } finally {
       loadingRef.current = false;
       setLoading(false);
     }
-  }, [addMessage, onCallsignUpdate, playReply]);
+  }, [addMessage, onCallsignUpdate, playReply, readOnly]);
 
   useEffect(() => {
     transcriptEnd.current?.scrollIntoView({ block: 'nearest' });
@@ -199,6 +199,10 @@ export default function ChatPanel({
 
   useEffect(() => {
     if (!audioBlob) return;
+    if (readOnly) {
+      consumeAudio();
+      return;
+    }
     let cancelled = false;
     setSttProcessing(true);
     sendSTT(audioBlob)
@@ -206,7 +210,7 @@ export default function ChatPanel({
       .catch((error) => { if (!cancelled) addMessage('system', error instanceof Error ? error.message : 'Voice transcription failed.'); })
       .finally(() => { if (!cancelled) { consumeAudio(); setSttProcessing(false); } });
     return () => { cancelled = true; };
-  }, [addMessage, audioBlob, consumeAudio, handleSend]);
+  }, [addMessage, audioBlob, consumeAudio, handleSend, readOnly]);
 
   useEffect(() => () => {
     activeAudio.current?.pause();
@@ -215,15 +219,59 @@ export default function ChatPanel({
 
   const beginPTT = useCallback(() => { playPTTStart(); void startRecording(micDeviceId || undefined); }, [micDeviceId, startRecording]);
   const endPTT = useCallback(() => { playPTTEnd(); stopRecording(); }, [stopRecording]);
-  usePTT(pttKey, beginPTT, endPTT, pttEnabled && !loading);
+  const voiceButtonRef = useRef<HTMLButtonElement>(null);
+  const activePointerRef = useRef<number | null>(null);
+  const releasePointerPTT = useCallback(() => {
+    const pointerId = activePointerRef.current;
+    if (pointerId === null) return;
+    activePointerRef.current = null;
+    const button = voiceButtonRef.current;
+    if (button?.hasPointerCapture(pointerId)) button.releasePointerCapture(pointerId);
+    endPTT();
+  }, [endPTT]);
+  const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!event.isPrimary || event.button !== 0 || activePointerRef.current !== null) return;
+    activePointerRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    beginPTT();
+  }, [beginPTT]);
+  const handlePointerRelease = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (activePointerRef.current === event.pointerId) releasePointerPTT();
+  }, [releasePointerPTT]);
 
-  const confidence = Math.max(0, Math.min(1, advisory.confidence ?? .75));
+  useEffect(() => {
+    if (readOnly || loading || sttProcessing) releasePointerPTT();
+  }, [loading, readOnly, releasePointerPTT, sttProcessing]);
+  usePTT(pttKey, beginPTT, endPTT, pttEnabled && !loading && !readOnly);
+
+  useEffect(() => {
+    const releasePointer = (event: PointerEvent) => {
+      if (activePointerRef.current === event.pointerId) releasePointerPTT();
+    };
+    const release = () => releasePointerPTT();
+    const releaseWhenHidden = () => { if (document.visibilityState === 'hidden') release(); };
+    window.addEventListener('pointerup', releasePointer, true);
+    window.addEventListener('pointercancel', releasePointer, true);
+    window.addEventListener('blur', release);
+    document.addEventListener('visibilitychange', releaseWhenHidden);
+    return () => {
+      window.removeEventListener('pointerup', releasePointer, true);
+      window.removeEventListener('pointercancel', releasePointer, true);
+      window.removeEventListener('blur', release);
+      document.removeEventListener('visibilitychange', releaseWhenHidden);
+      release();
+    };
+  }, [releasePointerPTT]);
+
+  const confidence = typeof advisory.confidence === 'number'
+    ? Math.max(0, Math.min(1, advisory.confidence))
+    : null;
   const rationale = Array.isArray(advisory.rationale) ? advisory.rationale : advisory.rationale ? [advisory.rationale] : [];
 
   return (
-    <aside className={`copilot-rail ${className}`} aria-label="AI copilot and emergency coach">
+    <aside className={`copilot-rail ${className}`} aria-label="ATC copilot and emergency coach">
       <header className="copilot-header">
-        <div className="copilot-title"><Sparkles aria-hidden="true" />AI copilot</div>
+        <div className="copilot-title"><Sparkles aria-hidden="true" />ATC copilot</div>
         <span className="live-label"><span className="mode-dot" />{sim.active_emergency ? 'Emergency' : 'Live'}</span>
       </header>
 
@@ -236,7 +284,7 @@ export default function ChatPanel({
                 const complete = step.status === 'completed';
                 return (
                 <li key={step.id} className={`emergency-step ${complete ? 'is-complete' : ''}`}>
-                  <button type="button" aria-label={`${complete ? 'Completed' : 'Complete'} ${step.label}`} disabled={complete} onClick={() => onEmergencyAction?.(step.id)}>{complete && <Check size={14} aria-hidden="true" />}</button>
+                  <button type="button" aria-label={`${complete ? 'Completed' : 'Complete'} ${step.label}`} disabled={complete || readOnly} onClick={() => onEmergencyAction?.(step.id)}>{complete && <Check size={14} aria-hidden="true" />}</button>
                   <div><strong>{step.label}</strong><span>{step.description}</span></div>
                   <em>{step.category || 'Next'}</em>
                 </li>
@@ -260,11 +308,10 @@ export default function ChatPanel({
         </section>
 
         <section className="insight-section">
-          <h3>Confidence</h3>
-          <div className="confidence-row">
-            <div className="confidence-meter" aria-label={`${Math.round(confidence * 100)} percent confidence`}>{[.2, .4, .6, .8, 1].map((threshold) => <span key={threshold} className={confidence >= threshold ? 'is-filled' : ''} />)}</div>
-            <span className="confidence-number">{Math.round(confidence * 100)}%</span>
-          </div>
+          <h3>{confidence === null ? 'Evidence basis' : 'Backend confidence'}</h3>
+          {confidence === null
+            ? <p>Rules- and telemetry-derived guidance. No probabilistic confidence was supplied.</p>
+            : <div className="confidence-row"><div className="confidence-meter" aria-label={`${Math.round(confidence * 100)} percent backend confidence`}>{[.2, .4, .6, .8, 1].map((threshold) => <span key={threshold} className={confidence >= threshold ? 'is-filled' : ''} />)}</div><span className="confidence-number">{Math.round(confidence * 100)}%</span></div>}
         </section>
 
         <section className="insight-section">
@@ -284,10 +331,10 @@ export default function ChatPanel({
             <article className="clearance-card">
               <span className="eyebrow">Pending clearance</span>
               <p>{pendingClearance.reply}</p>
-              <label><span className="sr-only">Pilot readback</span><input value={readback} onChange={(event) => setReadback(event.target.value)} placeholder="Read back every assigned heading, altitude, speed or instruction" /></label>
+              <label><span className="sr-only">Pilot readback</span><input value={readback} onChange={(event) => setReadback(event.target.value)} placeholder="Read back every assigned heading, altitude, speed or instruction" disabled={readOnly} /></label>
               <div>
                 <button className="secondary-button" type="button" onClick={() => setPendingClearance(null)}>Hold</button>
-                <button className="primary-button" type="button" disabled={!readback.trim()} onClick={async () => {
+                <button className="primary-button" type="button" disabled={!readback.trim() || readOnly} onClick={async () => {
                   try {
                     await acceptClearance(pendingClearance.id, readback.trim());
                     addMessage('system', 'Clearance accepted. Validated targets are now executing.');
@@ -305,11 +352,11 @@ export default function ChatPanel({
 
       <div className="chat-composer">
         <div className="voice-ready">
-          <button className={`voice-button ${isRecording ? 'is-recording' : ''}`} type="button" onPointerDown={beginPTT} onPointerUp={endPTT} onPointerCancel={endPTT} aria-label={isRecording ? 'Release to transcribe' : 'Hold to talk'}>
+          <button ref={voiceButtonRef} className={`voice-button ${isRecording ? 'is-recording' : ''}`} type="button" onPointerDown={handlePointerDown} onPointerUp={handlePointerRelease} onPointerCancel={handlePointerRelease} onLostPointerCapture={handlePointerRelease} aria-label={readOnly ? 'Voice transmission unavailable while live data is read-only' : isRecording ? 'Release to transcribe' : 'Hold to talk'} disabled={readOnly || sttProcessing || loading}>
             {sttProcessing ? <Loader2 className="spin" aria-hidden="true" /> : isRecording ? <Radio aria-hidden="true" /> : <Mic aria-hidden="true" />}
           </button>
-          <input className="composer-input" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void handleSend(); } }} placeholder={recorderError || `Message ATC · hold ${pttKey.replace('Key', '')} to talk`} aria-label="Message ATC" disabled={loading || isRecording} />
-          <button className="composer-send" type="button" onClick={() => void handleSend()} disabled={!input.trim() || loading} aria-label="Send message"><Send aria-hidden="true" /></button>
+          <input className="composer-input" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void handleSend(); } }} placeholder={readOnly ? 'Live ATC channel unavailable in read-only mode' : recorderError || `Message ATC · hold ${pttKey.replace('Key', '')} to talk`} aria-label="Message ATC" disabled={readOnly || loading || isRecording} />
+          <button className="composer-send" type="button" onClick={() => void handleSend()} disabled={readOnly || !input.trim() || loading} aria-label="Send message"><Send aria-hidden="true" /></button>
         </div>
       </div>
     </aside>
